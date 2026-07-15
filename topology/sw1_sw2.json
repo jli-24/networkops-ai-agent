@@ -1,0 +1,26 @@
+{
+  "devices": [
+    {
+      "id": "SW1",
+      "type": "switch",
+      "name": "Distribution Switch SW1",
+      "ip": "10.20.0.11"
+    },
+    {
+      "id": "SW2",
+      "type": "switch",
+      "name": "Access Switch SW2",
+      "ip": "10.20.0.12"
+    }
+  ],
+  "relationships": [
+    {
+      "source": "SW1",
+      "target": "SW2",
+      "type": "connect",
+      "source_interface": "Gi0/1",
+      "target_interface": "Gi0/24",
+      "evidence_ref": "TOPO-1001"
+    }
+  ]
+}
