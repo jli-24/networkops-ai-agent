@@ -14,7 +14,7 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Test-106%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Test-121%20passed-success?style=flat-square">
 
 </p>
 
@@ -53,6 +53,18 @@ v0.2.0 新增 Supervisor Multi-Agent 工作流，按依赖顺序协调 Topology�
 - 链路路径查询
 - 设备状态分析
 - 多源故障证据关联
+
+
+### 🧭 Network Digital Twin Preview
+
+v0.2.1 新增独立的内存型 Network Digital Twin 基础层：
+
+- 使用 Pydantic 表示设备、物理链路和带 UTC 时间戳的网络快照
+- 使用无向 NetworkX 图构建七节点校园网络拓扑
+- 查询设备、链路和邻居状态
+- 通过原子更新接口演化设备与链路状态
+
+当前 Preview 不连接真实设备，不支持 SNMP、NETCONF、故障注入或传播分析，也不执行自动配置修改；尚未接入现有 Agent 工作流。
 
 
 ### 🧪 Engineering Quality
@@ -216,7 +228,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-Ran 106 tests
+Ran 121 tests
 
 OK
 ```
@@ -251,6 +263,16 @@ Completed:
 - Read-only repair planning with human-approval requirements
 
 
+### v0.2.1 ✅ Network Digital Twin Foundation
+
+Completed:
+
+- Pydantic device, link and network-state models
+- In-memory NetworkX topology modeling
+- Deterministic seven-node campus topology
+- Validated device and link state evolution interfaces
+
+
 ### v0.3.0 🚧 Network Digital Twin
 
 Planning:
@@ -260,6 +282,7 @@ Planning:
 - Device and link behavior modeling
 - Fault propagation analysis
 - Impact scope evaluation
+- Agent integration
 
 
 ### v0.4.0 🚧 Autonomous Operations
@@ -313,6 +336,7 @@ Planning:
 
 - 两套依赖注入式 LangGraph 工作流：通用七节点质量闭环与专用八节点网络诊断图；
 - v0.2.0 Supervisor Multi-Agent 图：按需协调 Topology、Log、Diagnosis、Repair 与 Report Agent；
+- v0.2.1 Network Digital Twin Foundation：设备、无向物理链路、UTC 状态快照和内存状态演化接口；
 - 带文本层的 PDF、Markdown、TXT 文档加载，标题层级与 CLI 命令块保留；
 - BGE-M3 Embedding、Chroma 集合重建与语义检索；
 - 基于 NetworkX 的设备、关系、最短路径和双向接口查询；
@@ -330,6 +354,7 @@ Planning:
 - **Chroma**：当前采用集合重建模式。每次创建向量库都会清空并重建同名集合，不是完整的增量式持久化知识库；增量索引与集合生命周期管理属于后续规划。
 - **API**：当前 FastAPI 接口仅用于本地演示，未实现用户认证、权限控制、限流或 CORS 策略。禁止将当前服务直接暴露到公网或其他非可信网络。
 - **人工确认**：当前仅实现基于规则的人工确认策略，即在高风险建议中要求维护窗口和人工批准；尚未实现 LangGraph `interrupt` 暂停、checkpoint 恢复、审批人身份或审批记录。
+- **Digital Twin Preview**：当前仅支持内存中的网络拓扑建模、状态表示与状态演化基础接口；不连接真实设备，不支持 SNMP、NETCONF、故障注入、故障传播或自动配置修改，也尚未接入 Agent 工作流。
 
 ---
 
@@ -574,11 +599,11 @@ QueryAnalyzer
 | RAG | LangChain Text Splitters、BGE-M3、Sentence Transformers、Chroma |
 | Documents | PyMuPDF4LLM（仅文本型 PDF、无 OCR）、Markdown、TXT |
 | Frontend | Streamlit、标准库 `urllib` SSE 客户端 |
-| Testing | `unittest`、确定性 Embeddings test double、`compileall`、`pip check` |
+| Testing | `unittest`、pytest（可选开发依赖）、确定性 Embeddings test double、`compileall`、`pip check` |
 | Persistence | 本地 Chroma 集合重建模式；会话历史为进程内存 |
 | Deployment | 本地 Python 进程；Docker 尚未实现 |
 
-项目当前**没有** SQLAlchemy、关系数据库、pytest、Ruff 或 Docker Compose；仓库已有基础 GitHub Actions CI。
+项目当前**没有** SQLAlchemy、关系数据库、Ruff 或 Docker Compose；pytest 仅作为可选开发依赖，仓库已有基础 GitHub Actions CI。
 
 ## 9. 项目目录结构
 
@@ -611,6 +636,11 @@ QueryAnalyzer
 │   │   └── config.py
 │   ├── domain/
 │   │   └── topology.py
+│   ├── digital_twin/
+│   │   ├── models.py
+│   │   ├── network_model.py
+│   │   ├── simulator.py
+│   │   └── state.py
 │   ├── frontend/
 │   │   ├── app.py
 │   │   └── client.py
@@ -673,7 +703,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；其余阶段均为 **Planned**，不是当前实现。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation Preview 已在 v0.2.1 实现。完整 Digital Twin 及其余阶段均为 **Planned**，不是当前实现。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
@@ -687,10 +717,20 @@ Phase 1 已在 v0.2.0 实现；其余阶段均为 **Planned**，不是当前实�
 - Repair Agent 仅生成计划，不执行变更；
 - 首版为顺序单图，不包含并行、子图或 Checkpointer。
 
-### Phase 2 — Network Digital Twin（Planned）
+### Phase 2 — Network Digital Twin（Foundation Preview in v0.2.1）
 
-- 网络设备与链路状态模拟；
+当前支持：
+
+- 网络设备与无向物理链路建模；
+- 带 UTC 时间戳的网络状态快照；
+- 设备与链路状态演化基础接口；
+- 固定七节点校园网络拓扑。
+
+v0.3.0 规划：
+
 - 可控故障注入；
+- 故障传播和影响范围分析；
+- 与 Multi-Agent 诊断流程集成；
 - 配置变更沙箱；
 - 修复前影响评估与修复后回归验证。
 - Safe Auto Repair：白名单操作、风险分级、人工审批、执行、验证与回退。
@@ -749,6 +789,12 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 cp .env.example .env
 export PYTHONPATH=src
+```
+
+需要运行包含 pytest 的完整开发验证时，可在已激活的虚拟环境中安装项目及开发依赖：
+
+```powershell
+python -m pip install -e ".[dev]"
 ```
 
 ### 12.3 启动基础 API
@@ -819,6 +865,7 @@ curl "http://127.0.0.1:8000/api/v1/history?session_id=demo-1"
 
 ```powershell
 $env:PYTHONPATH = "src"
+pytest
 python -m unittest discover -s tests -v
 python -m compileall src tests
 python -m pip check
