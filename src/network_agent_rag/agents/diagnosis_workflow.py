@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Literal, TypedDict
+from typing import Literal
+from typing_extensions import TypedDict
 import re
 
 from langchain_core.documents import Document

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal, TypedDict
+from typing import Literal
+from typing_extensions import TypedDict
 
 from langchain_core.documents import Document
 from langgraph.errors import NodeError
