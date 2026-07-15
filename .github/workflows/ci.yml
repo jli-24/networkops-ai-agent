@@ -5,12 +5,13 @@ on:
     branches:
       - main
       - master
+      - codex/network-agent-rag
 
   pull_request:
     branches:
       - main
       - master
-
+      - codex/network-agent-rag
 
 jobs:
   test:
@@ -29,7 +30,7 @@ jobs:
           python-version: "3.11"
 
 
-      - name: Install dependencies
+      - name: Install project
         run: |
           python -m pip install --upgrade pip
           pip install -e .
