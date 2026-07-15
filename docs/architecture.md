@@ -2,10 +2,11 @@
 
 ## System Overview
 
-NetworkOps AI Agent v0.2.0 is a read-only Agentic RAG prototype with two compatible orchestration generations:
+NetworkOps AI Agent v0.3.0 keeps three compatible orchestration generations:
 
 - v0.1.0 keeps the general quality-control workflow and the dedicated single-agent diagnosis workflow;
 - v0.2.0 adds a supervisor-led multi-agent workflow without replacing the v0.1 entry points.
+- v0.3.0 adds an isolated checkpointed enterprise workflow without changing the earlier entry points.
 
 All workflows are dependency injected. The default FastAPI application does not create a model, vector store, or workflow automatically.
 
@@ -57,6 +58,12 @@ The Supervisor uses a structured callback to create a validated task plan. It di
 
 The first multi-agent release uses one shared graph, sequential routing, and bounded handoffs. It does not use subgraphs, parallel agents, persistent checkpoints, or agent memory.
 
+## v0.3.0 Enterprise Workflow
+
+The enterprise graph reuses the specialist agent helpers, then adds `RiskCheck`, `Approval`, and `Execute` nodes. An async SQLite checkpointer persists each graph thread under its `incident_id`. High or critical plans, and plans that explicitly require approval, pause through a LangGraph interrupt.
+
+Approval binds the incident, structured action digest, actor label, and 30-minute expiry. Execution is sequential, never retried automatically, and is possible only through explicitly injected allowlisted handlers. The default installation has no handlers and safely blocks execution. Agent, Tool, Decision, and Approval events are written to a separate redacted SQLite audit log.
+
 ## Existing v0.1.0 Workflows
 
 - The general workflow supports intent routing, document grading, query rewriting, answer generation, and answer checking.
@@ -69,8 +76,8 @@ The first multi-agent release uses one shared graph, sequential routing, and bou
 - Monitoring and log StructuredTools return fixed, reproducible, read-only snapshots.
 - Chroma collections are cleared and rebuilt at initialization; incremental indexing is not implemented.
 - PDF ingestion supports text-based PDFs only and does not include OCR.
-- FastAPI exposes health, SSE chat, and process-local history endpoints.
+- FastAPI exposes health, SSE chat, and process-local history endpoints. An explicitly created enterprise app also exposes incident start, status, approval, and audit endpoints.
 
 ## Safety
 
-The current implementation does not connect to real devices, execute commands, change configurations, restart interfaces, replace modules, or perform automatic repair. Human approval is a rule in the generated plan, not a LangGraph interrupt/checkpoint approval workflow.
+The repository does not provide real device connectors or built-in change handlers. The v0.3 enterprise graph has interrupt/checkpoint approval and an allowlisted executor contract, but default execution is blocked. Approval actors are not authenticated, so the API remains local-demo software and must not be exposed directly to untrusted networks.

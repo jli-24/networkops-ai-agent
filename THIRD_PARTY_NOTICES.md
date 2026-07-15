@@ -11,6 +11,7 @@ NetworkOps AI Agent 的原创代码依据根目录 [MIT License](LICENSE) 发布
 | FastAPI | 0.139.0 | MIT | 兼容；保留版权与许可声明 | [fastapi/fastapi](https://github.com/fastapi/fastapi/blob/master/LICENSE) |
 | Uvicorn | 0.51.0 | BSD-3-Clause | 兼容；保留版权、条件与免责声明 | [Kludex/uvicorn](https://github.com/Kludex/uvicorn/blob/main/LICENSE.md) |
 | LangGraph | 1.2.9 | MIT | 兼容；保留版权与许可声明 | [langchain-ai/langgraph](https://github.com/langchain-ai/langgraph/blob/main/LICENSE) |
+| langgraph-checkpoint-sqlite | 3.1.0 | MIT | 兼容；保留版权与许可声明 | [langchain-ai/langgraph](https://github.com/langchain-ai/langgraph/tree/main/libs/checkpoint-sqlite) |
 | pydantic-settings | 2.14.2 | MIT | 兼容；保留版权与许可声明 | [pydantic/pydantic-settings](https://github.com/pydantic/pydantic-settings) |
 | Pydantic | 2.13.4 | MIT | 兼容；保留版权与许可声明 | [pydantic/pydantic](https://github.com/pydantic/pydantic/blob/main/LICENSE) |
 | langchain-core | 1.4.9 | MIT | 兼容；保留版权与许可声明 | [langchain-ai/langchain](https://github.com/langchain-ai/langchain/blob/master/LICENSE) |

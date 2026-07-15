@@ -14,7 +14,7 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Test-136%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Test-151%20passed-success?style=flat-square">
 
 </p>
 
@@ -68,6 +68,20 @@ v0.2.1 新增独立的内存型 Network Digital Twin 基础层：
 当前 Preview 不连接真实设备，不支持 SNMP、NETCONF、故障注入或真实性能仿真，也不执行自动配置修改；传播分析不会改写 Twin，且尚未接入现有 Agent 工作流。
 
 
+### 🏢 Enterprise Workflow
+
+v0.3.0 新增独立、可选的企业工作流：
+
+- Async SQLite Checkpointer 按 `incident_id` 保存 LangGraph 状态
+- 高风险或明确要求审批的计划通过 `interrupt()` 暂停
+- approve/reject API 使用相同事件 ID 恢复执行
+- 审批绑定结构化动作摘要并默认 30 分钟过期
+- Agent、Tool、决策和审批事件写入脱敏 SQLite 审计日志
+- 只有显式注入白名单执行器时才能执行结构化动作
+
+旧 Multi-Agent 图、`/chat`、`/history` 和 Streamlit Demo 保持不变。默认没有执行器，因此不会修改真实网络。
+
+
 ### 🧪 Engineering Quality
 
 面向工程化开发：
@@ -81,12 +95,12 @@ v0.2.1 新增独立的内存型 Network Digital Twin 基础层：
 
 ### 🔐 Safety First
 
-当前系统采用只读诊断模式：
+默认安装采用安全阻断模式：
 
-- 不执行真实设备配置修改
+- 不包含真实设备配置执行器
 - 不直接执行网络命令
-- 高风险操作仅生成建议
-- 保留人工确认边界
+- 高风险操作通过 LangGraph interrupt 暂停
+- 审批仅对摘要匹配且未过期的结构化动作生效
 
 ## 🎬 Demo
 
@@ -229,7 +243,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-Ran 136 tests
+Ran 151 tests
 
 OK
 ```
@@ -284,26 +298,26 @@ Completed:
 - Normalized impact score and impact level
 
 
-### v0.3.0 🚧 Network Digital Twin
+### v0.3.0 ✅ Enterprise Workflow
+
+Completed:
+
+- Async SQLite LangGraph Checkpointer
+- Incident ID scoped persistence and interruption recovery
+- High-risk Human-in-the-loop approval flow
+- Digest-bound, expiring approve/reject decisions
+- Allowlisted executor injection with safe default blocking
+- Redacted SQLite audit logging
+
+
+### v0.4.0 🚧 Network Digital Twin
 
 Planning:
 
-- Dynamic network state simulation
-- Fault injection system
-- Device and link behavior modeling
+- Controlled fault injection and state recovery
 - Propagation timelines and multi-fault scenarios
-- Agent integration
-
-
-### v0.4.0 🚧 Autonomous Operations
-
-Planning:
-
-- Human-in-the-loop approval workflow
-- Safe repair execution
-- Operation audit logs
-- Recovery verification
-- Rollback mechanism
+- Multi-Agent integration
+- Repair impact analysis and post-change regression verification
 
 
 ### v1.0.0 🚧 Enterprise Platform
@@ -321,7 +335,7 @@ Planning:
 
 **原始项目：** Network Fault Diagnosis and Automated Operations Agent
 
-> NetworkOps AI Agent 是一个基于 LangGraph、RAG、NetworkX 与只读工具调用，用于企业/校园网络故障证据关联场景，实现拓扑、指标、日志和知识库联合诊断的智能运维平台原型。
+> NetworkOps AI Agent 是一个基于 LangGraph、RAG、NetworkX 与默认只读工具调用，用于企业/校园网络故障证据关联场景，实现联合诊断、审批恢复和可审计执行契约的智能运维平台原型。
 
 ## 目录
 
@@ -348,6 +362,7 @@ Planning:
 - v0.2.0 Supervisor Multi-Agent 图：按需协调 Topology、Log、Diagnosis、Repair 与 Report Agent；
 - v0.2.1 Network Digital Twin Foundation：设备、无向物理链路、UTC 状态快照和内存状态演化接口；
 - v0.2.2 Fault Propagation Simulator：只读网关可达性分析、受影响设备/链路/服务范围和归一化影响评分；
+- v0.3.0 Enterprise Workflow：SQLite checkpoint、事件恢复、运行时审批、白名单执行器注入和脱敏审计；
 - 带文本层的 PDF、Markdown、TXT 文档加载，标题层级与 CLI 命令块保留；
 - BGE-M3 Embedding、Chroma 集合重建与语义检索；
 - 基于 NetworkX 的设备、关系、最短路径和双向接口查询；
@@ -357,14 +372,16 @@ Planning:
 - Streamlit 对话、引用文档、拓扑路径与固定设备指标快照展示；
 - Python `unittest` 自动测试及确定性 Embeddings test double 离线测试策略。
 
-当前版本是**只读诊断与修复规划原型**，不连接真实网络设备，不执行接口重启、配置修改、模块更换或自动修复。真实 LLM、监控平台和知识源需要通过已有回调契约注入。
+当前版本默认仍是**不连接真实设备的诊断与修复规划原型**。Enterprise Workflow 只执行显式注入的白名单动作处理器；仓库不提供 SSH、Ansible、SNMP、NETCONF 或真实设备修改实现。真实 LLM、监控平台、知识源和执行器都必须由部署方注入。
 
 ### 当前限制与安全边界
 
 - **PDF**：仅支持能够直接提取文本的文本型 PDF；不支持扫描 PDF，当前未集成 OCR。
 - **Chroma**：当前采用集合重建模式。每次创建向量库都会清空并重建同名集合，不是完整的增量式持久化知识库；增量索引与集合生命周期管理属于后续规划。
-- **API**：当前 FastAPI 接口仅用于本地演示，未实现用户认证、权限控制、限流或 CORS 策略。禁止将当前服务直接暴露到公网或其他非可信网络。
-- **人工确认**：当前仅实现基于规则的人工确认策略，即在高风险建议中要求维护窗口和人工批准；尚未实现 LangGraph `interrupt` 暂停、checkpoint 恢复、审批人身份或审批记录。
+- **API**：当前 FastAPI 接口仅用于本地演示，未实现用户认证、权限控制、限流或 CORS 策略。审批字段 `actor` 只是审计标签，不是经过认证的用户身份。禁止将当前服务直接暴露到公网或其他非可信网络。
+- **人工确认**：Enterprise Workflow 已实现 LangGraph `interrupt`、SQLite checkpoint 和 approve/reject 审计，但尚无用户认证、角色权限或审批人身份校验；旧工作流仍只生成基于规则的人工确认提示。
+- **SQLite**：Checkpointer 和审计库适用于单进程本地演示，不提供多 worker 协调或高可用；生产部署应迁移到适合并发工作负载的数据库。
+- **执行幂等性**：工作流不会自动重试 Execute，但 SQLite checkpoint 与外部变更不构成分布式事务。部署方注入的动作处理器必须以 `action_id` 实现幂等性并自行完成真实变更验证。
 - **Digital Twin Preview**：当前支持内存拓扑、状态演化和只读故障传播分析；不连接真实设备，不支持 SNMP、NETCONF、故障注入、传播时间线、真实性能仿真或自动配置修改，也尚未接入 Agent 工作流。
 
 ---
@@ -382,14 +399,18 @@ NetworkOps AI Agent 面向企业和校园网络运维场景，将知识检索、
   ↓
 证据关联与根因假设
   ↓
-只读排查建议与风险提示
+修复计划与结构化动作
   ↓
-人工决策（系统仅提示，不执行审批）
+风险检查
   ↓
-验证计划
+高风险 interrupt 审批 / 低风险继续
+  ↓
+白名单执行器（默认未配置并阻断）
+  ↓
+审计与文本报告
 ```
 
-运行时审批、自动执行和真实恢复验证尚未实现，见 [Detailed Roadmap](#11-detailed-roadmap)。
+Enterprise Workflow 与旧工作流并存；真实网络动作、身份认证和自动回退仍未实现，见 [Detailed Roadmap](#11-detailed-roadmap)。
 
 ## 2. 项目背景
 
@@ -443,7 +464,7 @@ NetworkX / Fixed Monitoring Snapshot / Redacted Logs / Chroma
 - 默认检查器拒绝未知证据编号，以及“已自动执行”“自动执行修复”“已重启接口”“已更换光模块”“已修改配置”等越权表述；
 - 参数错误、未知设备和未知接口返回明确错误码。
 
-当前 API 也未实现用户认证、权限控制、限流和 CORS 策略，仅限本地演示；权限系统、持久化审计和操作白名单执行器均尚未实现。
+当前 API 仍未实现用户认证、权限控制、限流和 CORS 策略，仅限本地演示。Enterprise Workflow 已提供 SQLite 审计和白名单执行器契约，但没有内置真实动作处理器；审批人字段不能替代身份认证。
 
 ### 3.3 Evidence-based Diagnosis
 
@@ -464,17 +485,17 @@ Reasoning（推断）
 
 缺失任何证据时，分数会下降；证据不足时，结论会标记为“待验证假设”。
 
-### 3.4 Human-in-the-loop（基于规则的人工确认策略）
+### 3.4 Human-in-the-loop
 
-当前实现不是可暂停、可恢复的运行时审批流程，而是基于规则的人工确认策略。系统不会执行状态变更；对于更换光模块等高风险建议，答案必须明确要求维护窗口和人工批准，并提供验证与回退条件。
+v0.3.0 Enterprise Workflow 使用 SQLite Checkpointer 和 LangGraph `interrupt()` 实现可暂停、可恢复审批。审批绑定事件 ID、结构化动作摘要和 30 分钟有效期；reject 后直接生成未执行报告。旧 v0.1/v0.2 工作流仍保持原有的规则提示行为。
 
 | 风险级别 | 当前处理方式 | 示例 |
 | --- | --- | --- |
-| LOW | 允许给出只读检查步骤 | 查询 CRC、光功率、接口状态 |
-| MEDIUM | 仅给出建议，不自动执行 | 扩大监控采样、现场检查跳纤 |
-| HIGH | 明确要求维护窗口与人工批准 | 更换光模块、修改网络配置 |
+| LOW | 未强制审批；仅在注入白名单处理器后执行 | 查询或演示环境状态更新 |
+| MEDIUM | 未强制审批；计划可显式要求人工批准 | 有限范围的演示变更 |
+| HIGH / CRITICAL | 必须暂停并等待摘要匹配的人工决策 | 任何可能影响网络服务的动作 |
 
-当前没有 LangGraph `interrupt` 暂停、checkpoint 恢复、审批人身份或审批记录。真正的审批 API、审批状态机和操作执行器属于未来计划。
+当前没有审批身份认证、RBAC 或内置真实网络执行器。`actor` 仅供审计记录；执行节点不会重试状态变更，且遇到首个失败动作立即停止。
 
 ### 3.5 Reproducibility
 
@@ -524,6 +545,7 @@ flowchart TB
 
 - FastAPI 通过应用工厂接收已编译工作流；默认模块级应用不虚构 Agent，聊天接口会返回 HTTP 503；
 - v0.1 专用演示入口保留原单 Agent 诊断图；v0.2 显式入口装配 Supervisor Multi-Agent、NetworkX、固定监控/日志和 Chroma；
+- v0.3 Enterprise Workflow 使用独立 `/incidents` API、SQLite checkpoint 和审计库，不改变旧聊天接口；
 - 通用工作流允许部署方注入真实生成器、检查器和数据源；
 - 当前没有关系数据库、业务数据库、故障注入器或真实设备客户端；Multi-Agent 采用单一共享状态图、顺序调度，不使用子图或并行 Agent。Chroma 当前采用清空同名集合后重新写入的集合重建模式，不支持增量索引。
 
@@ -544,9 +566,12 @@ flowchart TB
 | FastAPI SSE | ✅ Current | `start → node* → answer/error` 节点级流式事件 |
 | Streamlit Console | ✅ Current | 对话、引用、拓扑路径和固定指标快照展示 |
 | 进程内会话历史 | ✅ Current | 按会话隔离；重启清空，多 worker 不共享 |
-| 人工确认策略 | ✅ Current | 通过规则要求维护窗口和人工批准；没有 interrupt、checkpoint 或审批记录 |
+| Enterprise Checkpoint | ✅ Current | Async SQLite、按 incident ID 隔离、进程重启后恢复 |
+| Human-in-the-loop | ✅ Current | 高风险 interrupt、摘要绑定、30 分钟有效期、approve/reject 恢复 |
+| Audit Logging | ✅ Current | Agent、Tool、决策和审批的脱敏 SQLite 记录 |
+| 白名单执行器契约 | ✅ Current | 仅执行结构化动作；默认无处理器并安全阻断 |
 | 故障注入 | 🧭 Planned | 设备离线、端口关闭、拥塞和组合故障注入 |
-| 自动修复 | 🧭 Planned | 白名单操作、风险分级、审批、执行、验证与回退 |
+| 真实网络自动修复 | 🧭 Planned | 认证、厂商适配、自动验证和经过测试的回退 |
 | Incident Report 文件导出 | 🧭 Planned | 结构化事件报告与 PDF/Markdown 导出 |
 | Docker Compose | 🧭 Planned | 后端、前端和数据服务容器化 |
 
@@ -614,7 +639,7 @@ QueryAnalyzer
 | Documents | PyMuPDF4LLM（仅文本型 PDF、无 OCR）、Markdown、TXT |
 | Frontend | Streamlit、标准库 `urllib` SSE 客户端 |
 | Testing | `unittest`、pytest（可选开发依赖）、确定性 Embeddings test double、`compileall`、`pip check` |
-| Persistence | 本地 Chroma 集合重建模式；会话历史为进程内存 |
+| Persistence | Chroma 集合重建；Async SQLite LangGraph checkpoint；独立 SQLite 审计；聊天历史仍为进程内存 |
 | Deployment | 本地 Python 进程；Docker 尚未实现 |
 
 项目当前**没有** SQLAlchemy、关系数据库、Ruff 或 Docker Compose；pytest 仅作为可选开发依赖，仓库已有基础 GitHub Actions CI。
@@ -634,6 +659,11 @@ QueryAnalyzer
 │       └── specs/
 ├── src/network_agent_rag/
 │   ├── agents/
+│   │   ├── enterprise/
+│   │   │   ├── approval.py
+│   │   │   ├── execution.py
+│   │   │   ├── state.py
+│   │   │   └── workflow.py
 │   │   ├── multi_agent/
 │   │   │   ├── state.py
 │   │   │   ├── supervisor.py
@@ -643,11 +673,16 @@ QueryAnalyzer
 │   │   ├── monitoring_tools.py
 │   │   └── workflow.py
 │   ├── api/
+│   │   ├── enterprise.py
+│   │   ├── enterprise_schemas.py
 │   │   ├── history.py
 │   │   ├── router.py
 │   │   └── schemas.py
 │   ├── core/
 │   │   └── config.py
+│   ├── audit/
+│   │   ├── models.py
+│   │   └── store.py
 │   ├── domain/
 │   │   └── topology.py
 │   ├── digital_twin/
@@ -720,7 +755,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现。完整 Digital Twin 及其余阶段均为 **Planned**，不是当前实现。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow。完整 Digital Twin、生产身份体系和真实设备执行仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
@@ -746,30 +781,40 @@ Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分�
 - 基于边缘网关可达性的只读传播范围分析；
 - 设备、链路和服务影响评分。
 
-v0.3.0 规划：
+v0.4.0 规划：
 
 - 可控故障注入；
 - 故障恢复、传播时间线和多故障组合；
 - 与 Multi-Agent 诊断流程集成；
 - 配置变更沙箱；
 - 修复前影响评估与修复后回归验证。
-- Safe Auto Repair：白名单操作、风险分级、人工审批、执行、验证与回退。
 
-### Phase 3 — Vue3 Dashboard（Planned）
+### Phase 3 — Enterprise Workflow（Completed in v0.3.0）
+
+- Async SQLite Checkpointer 与 incident ID 隔离；
+- LangGraph interrupt 暂停及 `Command(resume=...)` 恢复；
+- high/critical 和显式强制审批策略；
+- 动作摘要、审批人标签和 30 分钟有效期；
+- 白名单执行器注入、单动作顺序执行和失败即停；
+- Agent、Tool、Decision、Approval 脱敏审计。
+
+限制：SQLite 仅适合单进程演示；没有用户认证、RBAC、真实设备处理器、自动验证或自动回退。
+
+### Phase 4 — Vue3 Dashboard（Planned）
 
 - Vue3 + TypeScript 运维控制台；
 - 交互式拓扑图与故障路径高亮；
 - 告警、证据、审批和事件时间线；
 - 用户、角色与权限管理。
 
-### Phase 4 — Benchmark Evaluation（Planned）
+### Phase 5 — Benchmark Evaluation（Planned）
 
 - 网络运维复杂问题测试集；
 - 检索准确率、答案准确率、幻觉率和平均迭代次数；
 - 多跳拓扑与厂商命令差异评测；
 - Bad Case 分析与回归基线。
 
-### Phase 5 — Open Source Release（Planned）
+### Phase 6 — Open Source Release（Planned）
 
 - Dockerfile 与 Docker Compose；
 - 发布自动化、代码格式与静态检查；
@@ -881,7 +926,36 @@ curl -N -X POST http://127.0.0.1:8000/api/v1/chat \
 curl "http://127.0.0.1:8000/api/v1/history?session_id=demo-1"
 ```
 
-### 12.8 运行测试
+### 12.8 Enterprise Incident API
+
+企业接口只会由 `create_enterprise_app()` 或 `create_sqlite_enterprise_app()` 显式挂载；默认 `network_agent_rag.main:app` 不创建工作流、数据库或执行器。
+
+创建事件：
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/api/v1/incidents \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"demo-1","incident_id":"INC-1001","query":"分析 SW1 到 SW2 的链路丢包"}'
+```
+
+当 SSE 返回 `approval_required` 后，使用其中的 `plan_digest` 审批并继续流式执行：
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/api/v1/incidents/INC-1001/approval \
+  -H "Content-Type: application/json" \
+  -d '{"decision":"approve","actor":"local-operator","plan_digest":"<64-char digest>"}'
+```
+
+查询状态和审计：
+
+```bash
+curl http://127.0.0.1:8000/api/v1/incidents/INC-1001
+curl http://127.0.0.1:8000/api/v1/incidents/INC-1001/audit
+```
+
+`actor` 未经过身份认证，不能作为生产审批身份。真实执行器必须由部署方显式注入并在可信网络中使用。
+
+### 12.9 运行测试
 
 ```powershell
 $env:PYTHONPATH = "src"
@@ -893,7 +967,7 @@ python -m pip check
 
 测试使用确定性 Embeddings test double（包含轻量 FakeEmbeddings 实现），不下载 BGE-M3，也不会访问真实网络设备。
 
-### 12.9 Docker
+### 12.10 Docker
 
 当前仓库没有 Dockerfile 或 Docker Compose，暂不支持 Docker 启动。容器化发布已列入 Roadmap Phase 5。
 

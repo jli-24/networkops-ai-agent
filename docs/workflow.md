@@ -48,8 +48,23 @@ The state also retains the v0.1 API fields. Device evidence is mirrored to `metr
 
 The original general and diagnosis workflows remain unchanged as public entry points. The v0.1 demonstration starts through `network_agent_rag.demo_main:app`; the new multi-agent demonstration starts through `network_agent_rag.multi_agent_main:app`.
 
+## v0.3.0 Enterprise Flow
+
+```text
+Diagnosis → Repair Plan → Risk Check
+                              ├─ low/medium → Execute
+                              └─ high/critical or forced approval
+                                          ↓
+                                      Approval interrupt
+                                      ├─ approve → Execute
+                                      └─ reject → Report
+Execute → Report → END
+```
+
+The enterprise API uses `incident_id` as the LangGraph thread ID. Starting an incident streams node progress until either a final answer or an `approval_required` event. Approval resumes the same checkpoint with `Command(resume=...)`. Approval is valid only for the matching structured action digest and before its expiry.
+
 ## Output and Safety
 
 The Report Agent returns text through the chat API and Streamlit. It does not export a PDF or Markdown file. The Repair Agent only returns a `not_executed` plan with human-approval, verification, and rollback requirements.
 
-No workflow executes device commands, modifies configurations, injects faults, restarts interfaces, or performs automatic repair.
+The v0.1 and v0.2 workflows never execute changes. The v0.3 workflow can call only explicitly injected allowlisted handlers; none are included by default. It does not execute free-form report text or generated network commands.
