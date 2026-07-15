@@ -14,7 +14,7 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Test-121%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Test-136%20passed-success?style=flat-square">
 
 </p>
 
@@ -63,8 +63,9 @@ v0.2.1 新增独立的内存型 Network Digital Twin 基础层：
 - 使用无向 NetworkX 图构建七节点校园网络拓扑
 - 查询设备、链路和邻居状态
 - 通过原子更新接口演化设备与链路状态
+- v0.2.2 基于边缘网关可达性进行只读故障传播和影响评分
 
-当前 Preview 不连接真实设备，不支持 SNMP、NETCONF、故障注入或传播分析，也不执行自动配置修改；尚未接入现有 Agent 工作流。
+当前 Preview 不连接真实设备，不支持 SNMP、NETCONF、故障注入或真实性能仿真，也不执行自动配置修改；传播分析不会改写 Twin，且尚未接入现有 Agent 工作流。
 
 
 ### 🧪 Engineering Quality
@@ -228,7 +229,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-Ran 121 tests
+Ran 136 tests
 
 OK
 ```
@@ -273,6 +274,16 @@ Completed:
 - Validated device and link state evolution interfaces
 
 
+### v0.2.2 ✅ Fault Propagation Simulator
+
+Completed:
+
+- Validated device, service and link fault models
+- Read-only gateway-reachability propagation analysis
+- Deterministic affected device, link and service scope
+- Normalized impact score and impact level
+
+
 ### v0.3.0 🚧 Network Digital Twin
 
 Planning:
@@ -280,8 +291,7 @@ Planning:
 - Dynamic network state simulation
 - Fault injection system
 - Device and link behavior modeling
-- Fault propagation analysis
-- Impact scope evaluation
+- Propagation timelines and multi-fault scenarios
 - Agent integration
 
 
@@ -337,6 +347,7 @@ Planning:
 - 两套依赖注入式 LangGraph 工作流：通用七节点质量闭环与专用八节点网络诊断图；
 - v0.2.0 Supervisor Multi-Agent 图：按需协调 Topology、Log、Diagnosis、Repair 与 Report Agent；
 - v0.2.1 Network Digital Twin Foundation：设备、无向物理链路、UTC 状态快照和内存状态演化接口；
+- v0.2.2 Fault Propagation Simulator：只读网关可达性分析、受影响设备/链路/服务范围和归一化影响评分；
 - 带文本层的 PDF、Markdown、TXT 文档加载，标题层级与 CLI 命令块保留；
 - BGE-M3 Embedding、Chroma 集合重建与语义检索；
 - 基于 NetworkX 的设备、关系、最短路径和双向接口查询；
@@ -354,7 +365,7 @@ Planning:
 - **Chroma**：当前采用集合重建模式。每次创建向量库都会清空并重建同名集合，不是完整的增量式持久化知识库；增量索引与集合生命周期管理属于后续规划。
 - **API**：当前 FastAPI 接口仅用于本地演示，未实现用户认证、权限控制、限流或 CORS 策略。禁止将当前服务直接暴露到公网或其他非可信网络。
 - **人工确认**：当前仅实现基于规则的人工确认策略，即在高风险建议中要求维护窗口和人工批准；尚未实现 LangGraph `interrupt` 暂停、checkpoint 恢复、审批人身份或审批记录。
-- **Digital Twin Preview**：当前仅支持内存中的网络拓扑建模、状态表示与状态演化基础接口；不连接真实设备，不支持 SNMP、NETCONF、故障注入、故障传播或自动配置修改，也尚未接入 Agent 工作流。
+- **Digital Twin Preview**：当前支持内存拓扑、状态演化和只读故障传播分析；不连接真实设备，不支持 SNMP、NETCONF、故障注入、传播时间线、真实性能仿真或自动配置修改，也尚未接入 Agent 工作流。
 
 ---
 
@@ -514,7 +525,7 @@ flowchart TB
 - FastAPI 通过应用工厂接收已编译工作流；默认模块级应用不虚构 Agent，聊天接口会返回 HTTP 503；
 - v0.1 专用演示入口保留原单 Agent 诊断图；v0.2 显式入口装配 Supervisor Multi-Agent、NetworkX、固定监控/日志和 Chroma；
 - 通用工作流允许部署方注入真实生成器、检查器和数据源；
-- 当前没有关系数据库、业务数据库、网络模拟器或真实设备客户端；Multi-Agent 采用单一共享状态图、顺序调度，不使用子图或并行 Agent。Chroma 当前采用清空同名集合后重新写入的集合重建模式，不支持增量索引。
+- 当前没有关系数据库、业务数据库、故障注入器或真实设备客户端；Multi-Agent 采用单一共享状态图、顺序调度，不使用子图或并行 Agent。Chroma 当前采用清空同名集合后重新写入的集合重建模式，不支持增量索引。
 
 ## 5. 功能特性
 
@@ -523,6 +534,8 @@ flowchart TB
 | LangGraph Agent Workflow | ✅ Current | 条件边、循环、有限重试和结构化错误终止 |
 | Supervisor Multi-Agent | ✅ Current | 依赖感知路由、共享 TypedDict 状态、有限交接和专业 Agent 降级处理 |
 | 网络拓扑建模 | ✅ Current | 从 JSON 加载设备与关系，查询最短路径、邻居和双向接口 |
+| Network Digital Twin | ✅ Current | 内存设备/链路状态、UTC 快照与状态演化基础接口 |
+| 故障传播分析 | ✅ Current | 只读网关可达性分析及设备、链路、服务影响评分 |
 | 监控 Tool | ✅ Current | 查询固定设备、接口和告警快照 |
 | 日志 Tool | ✅ Current | 时间范围过滤、脱敏记录、证据引用和结构化错误 |
 | RAG | ✅ Current | 文本型 PDF/Markdown/TXT、结构化切片、BGE-M3、Chroma 集合重建与检索；无 OCR |
@@ -539,7 +552,7 @@ flowchart TB
 
 ## 6. 支持故障类型
 
-当前“支持”指固定快照查询或演示诊断能力，不代表能够向环境注入故障。
+当前“支持”包括固定快照查询、演示诊断和只读传播分析，不代表能够向环境注入故障。
 
 | 场景 | 当前支持度 | 示例 |
 | --- | --- | --- |
@@ -547,6 +560,7 @@ flowchart TB
 | 设备在线/降级/离线 | 状态查询样例 | `core-sw-01` 在线、`edge-rtr-01` 降级、`access-sw-01` 离线 |
 | 接口 up/down | 状态查询样例 | 查询管理状态、运行状态、流量和丢包率 |
 | 告警过滤 | 查询样例 | 按设备、严重级别和活动状态过滤固定告警 |
+| device/service/link/performance Fault | 只读传播分析 | 输入规范化 Fault，计算失去边缘网关可达性的设备及影响范围 |
 | 服务停止 | 未实现 | Roadmap：服务探测 Tool 与服务恢复审批 |
 | 链路拥塞 | 未实现 | Roadmap：时序指标、容量基线和拥塞诊断 |
 | 多故障组合 | 未实现 | Roadmap：故障注入与多假设排序 |
@@ -637,8 +651,11 @@ QueryAnalyzer
 │   ├── domain/
 │   │   └── topology.py
 │   ├── digital_twin/
+│   │   ├── fault.py
+│   │   ├── impact.py
 │   │   ├── models.py
 │   │   ├── network_model.py
+│   │   ├── propagation.py
 │   │   ├── simulator.py
 │   │   └── state.py
 │   ├── frontend/
@@ -703,7 +720,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation Preview 已在 v0.2.1 实现。完整 Digital Twin 及其余阶段均为 **Planned**，不是当前实现。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现。完整 Digital Twin 及其余阶段均为 **Planned**，不是当前实现。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
@@ -717,7 +734,7 @@ Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation Preview 已在 v0.2.1 实�
 - Repair Agent 仅生成计划，不执行变更；
 - 首版为顺序单图，不包含并行、子图或 Checkpointer。
 
-### Phase 2 — Network Digital Twin（Foundation Preview in v0.2.1）
+### Phase 2 — Network Digital Twin（Foundation v0.2.1 / Propagation v0.2.2）
 
 当前支持：
 
@@ -725,11 +742,14 @@ Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation Preview 已在 v0.2.1 实�
 - 带 UTC 时间戳的网络状态快照；
 - 设备与链路状态演化基础接口；
 - 固定七节点校园网络拓扑。
+- 五类规范化 Fault 模型；
+- 基于边缘网关可达性的只读传播范围分析；
+- 设备、链路和服务影响评分。
 
 v0.3.0 规划：
 
 - 可控故障注入；
-- 故障传播和影响范围分析；
+- 故障恢复、传播时间线和多故障组合；
 - 与 Multi-Agent 诊断流程集成；
 - 配置变更沙箱；
 - 修复前影响评估与修复后回归验证。
