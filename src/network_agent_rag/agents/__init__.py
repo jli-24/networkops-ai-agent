@@ -14,6 +14,14 @@ from network_agent_rag.agents.monitoring_tools import (
     query_device_status,
     query_interface,
 )
+from network_agent_rag.agents.multi_agent import (
+    AgentName,
+    DiagnosisResult,
+    MultiAgentState,
+    RepairPlan,
+    SupervisorPlan,
+    create_multi_agent_workflow,
+)
 from network_agent_rag.agents.workflow import (
     AgentState,
     CheckerResult,
@@ -24,16 +32,22 @@ from network_agent_rag.agents.workflow import (
 
 __all__ = [
     "AgentState",
+    "AgentName",
     "CheckerResult",
     "DocumentGradeResult",
     "DiagnosisPlan",
+    "DiagnosisResult",
     "DiagnosisState",
     "EvidenceSource",
     "Intent",
     "LOG_TOOLS",
     "MONITORING_TOOLS",
+    "MultiAgentState",
+    "RepairPlan",
     "RootCauseHypothesis",
+    "SupervisorPlan",
     "create_agent_workflow",
+    "create_multi_agent_workflow",
     "create_network_diagnosis_workflow",
     "query_alarm",
     "query_device_status",

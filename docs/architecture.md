@@ -2,19 +2,14 @@
 
 ## System Overview
 
-NetworkOps AI Agent is a read-only Agentic RAG prototype for network fault diagnosis.
+NetworkOps AI Agent v0.2.0 is a read-only Agentic RAG prototype with two compatible orchestration generations:
 
-The current implementation combines:
+- v0.1.0 keeps the general quality-control workflow and the dedicated single-agent diagnosis workflow;
+- v0.2.0 adds a supervisor-led multi-agent workflow without replacing the v0.1 entry points.
 
-- LangGraph state management, conditional routing, limited retries, and answer checking;
-- RAG retrieval from text-based PDF, Markdown, and TXT documents;
-- NetworkX topology loaded from JSON;
-- Fixed snapshot diagnosis using deterministic monitoring metrics and redacted logs;
-- Evidence correlation across topology, metrics, logs, and knowledge;
-- Root cause hypothesis generation with rule-based confidence;
-- Text diagnosis report delivery through FastAPI and Streamlit.
+All workflows are dependency injected. The default FastAPI application does not create a model, vector store, or workflow automatically.
 
-## Architecture
+## v0.2.0 Multi-Agent Architecture
 
 ```text
 User / Network Operator
@@ -28,58 +23,54 @@ User / Network Operator
       FastAPI API
           |
           v
-Compiled LangGraph Workflow
-          |
-          v
-     QueryAnalyzer
-          |
-          v
-Requested Evidence Sources
-  |       |       |       |
-  v       v       v       v
-NetworkX  Fixed   Redacted RAG Retrieval
-topology  metrics logs     (Chroma)
-  |       |       |       |
-  +-------+-------+-------+
-          |
-          v
-  EvidenceCorrelator
-          |
-          v
- Root cause hypothesis
-          |
-          v
-       Generator
-          |
-          v
-HallucinationChecker
-          |
-          v
+ Supervisor StateGraph
+    |      |       |
+    v      v       v
+Topology  Log   Diagnosis
+ Agent   Agent    Agent
+                  |  |
+                  |  +-- Fixed monitoring snapshot
+                  +----- Chroma RAG
+    |      |       |
+    +------+-------+
+           |
+           v
+      Repair Agent
+     (plan only)
+           |
+           v
+      Report Agent
+           |
+           v
  Text diagnosis report
 ```
 
-## Core Components
+The Supervisor uses a structured callback to create a validated task plan. It dispatches agents sequentially in dependency order and receives every result through a shared `MultiAgentState`. Agents do not call one another directly.
 
-### API and User Interface
+## Agent Responsibilities
 
-- FastAPI exposes health, SSE chat, and in-memory history endpoints.
-- Streamlit displays conversations, source documents, topology paths, and fixed device metrics.
-- The default FastAPI application does not create a workflow automatically; deployments inject a compiled graph.
+- **Topology Agent** reads NetworkX paths and endpoint interfaces.
+- **Log Agent** reads deterministic, redacted log snapshots.
+- **Diagnosis Agent** reads monitoring evidence, performs RAG retrieval and query rewriting, and correlates evidence into a root cause hypothesis.
+- **Repair Agent** creates a risk-classified plan with approval, verification, and rollback requirements. It never executes the plan.
+- **Report Agent** produces and checks the final evidence-grounded text report.
 
-### LangGraph Workflows
+The first multi-agent release uses one shared graph, sequential routing, and bounded handoffs. It does not use subgraphs, parallel agents, persistent checkpoints, or agent memory.
+
+## Existing v0.1.0 Workflows
 
 - The general workflow supports intent routing, document grading, query rewriting, answer generation, and answer checking.
-- The diagnosis workflow conditionally reads requested evidence sources before correlating evidence and generating an answer.
-- Connection and timeout failures receive limited retries; answer regeneration is bounded to prevent infinite loops.
+- The diagnosis workflow conditionally reads topology, fixed monitoring, redacted logs, and RAG documents before evidence correlation.
+- Both factories and the original `demo_main:app` entry point remain available for rollback and compatibility testing.
 
-### Evidence Sources
+## Data and API Boundaries
 
-- NetworkX provides device relationships, paths, neighbors, and endpoint interface mappings.
-- Monitoring and log tools return fixed, reproducible, read-only snapshots.
-- Chroma stores rebuilt demo collections and provides semantic retrieval over network operation documents.
+- NetworkX provides topology paths, neighbors, device data, and endpoint interface mappings.
+- Monitoring and log StructuredTools return fixed, reproducible, read-only snapshots.
+- Chroma collections are cleared and rebuilt at initialization; incremental indexing is not implemented.
+- PDF ingestion supports text-based PDFs only and does not include OCR.
+- FastAPI exposes health, SSE chat, and process-local history endpoints.
 
-### Diagnosis Output and Safety
+## Safety
 
-- Evidence correlation produces a Root cause hypothesis rather than a statistically calibrated failure probability.
-- The Text diagnosis report contains evidence, uncertainty, read-only checks, and recommendations.
-- The current implementation does not connect to real devices, inject faults, change configurations, or perform automatic repair.
+The current implementation does not connect to real devices, execute commands, change configurations, restart interfaces, replace modules, or perform automatic repair. Human approval is a rule in the generated plan, not a LangGraph interrupt/checkpoint approval workflow.

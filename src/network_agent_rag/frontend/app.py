@@ -25,6 +25,12 @@ NODE_LABELS = {
     "EvidenceCorrelator": "正在关联多源证据并计算规则分数",
     "Generator": "正在生成回答",
     "HallucinationChecker": "正在检查回答依据",
+    "Supervisor": "Supervisor 正在规划并分派任务",
+    "TopologyAgent": "Topology Agent 正在查询网络路径与链路接口",
+    "LogAgent": "Log Agent 正在检索故障时间窗口日志",
+    "DiagnosisAgent": "Diagnosis Agent 正在关联监控与知识库证据",
+    "RepairAgent": "Repair Agent 正在生成需人工批准的修复计划",
+    "ReportAgent": "Report Agent 正在生成证据化诊断报告",
 }
 
 

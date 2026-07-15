@@ -174,6 +174,18 @@ class StreamlitAppTests(TestCase):
             self.assertIn(node, NODE_LABELS)
             self.assertTrue(NODE_LABELS[node])
 
+    def test_maps_multi_agent_nodes_to_chinese_progress_labels(self) -> None:
+        for node in (
+            "Supervisor",
+            "TopologyAgent",
+            "LogAgent",
+            "DiagnosisAgent",
+            "RepairAgent",
+            "ReportAgent",
+        ):
+            self.assertIn(node, NODE_LABELS)
+            self.assertTrue(NODE_LABELS[node])
+
     def test_renders_single_page_console_without_calling_the_backend(self) -> None:
         app = AppTest.from_file(str(self.app_path)).run()
 

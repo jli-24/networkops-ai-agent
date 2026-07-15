@@ -129,7 +129,7 @@ def create_network_diagnosis_workflow(
         if not isinstance(query, str) or not query.strip():
             raise ValueError("user_query must be a non-empty string")
         plan = analyze_query(query.strip())
-        _validate_plan(plan)
+        validate_diagnosis_plan(plan)
         return {
             "user_query": query.strip(),
             "rewritten_query": query.strip(),
@@ -194,7 +194,7 @@ def create_network_diagnosis_workflow(
         return {"documents": found}
 
     def evidence_correlator(state: DiagnosisState) -> dict[str, object]:
-        hypothesis, references = _correlate_evidence(state)
+        hypothesis, references = correlate_diagnosis_evidence(state)
         return {"hypotheses": [hypothesis], "evidence_refs": references}
 
     def generator(state: DiagnosisState) -> dict[str, object]:
@@ -306,7 +306,7 @@ def _empty_plan() -> DiagnosisPlan:
     }
 
 
-def _validate_plan(plan: object) -> None:
+def validate_diagnosis_plan(plan: object) -> None:
     if not isinstance(plan, dict):
         raise ValueError("analyze_query must return a DiagnosisPlan")
     required_fields = {
@@ -335,7 +335,7 @@ def _validate_plan(plan: object) -> None:
         raise ValueError("required_sources must not contain duplicates")
 
 
-def _correlate_evidence(
+def correlate_diagnosis_evidence(
     state: DiagnosisState,
 ) -> tuple[RootCauseHypothesis, list[str]]:
     score = 0
@@ -662,5 +662,7 @@ __all__ = [
     "DiagnosisState",
     "EvidenceSource",
     "RootCauseHypothesis",
+    "correlate_diagnosis_evidence",
     "create_network_diagnosis_workflow",
+    "validate_diagnosis_plan",
 ]

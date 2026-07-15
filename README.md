@@ -14,7 +14,7 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Test-92%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Test-106%20passed-success?style=flat-square">
 
 </p>
 
@@ -30,6 +30,8 @@
 - Tool Calling 工具调用
 - 多步骤故障诊断流程
 - 根因分析与报告生成
+
+v0.2.0 新增 Supervisor Multi-Agent 工作流，按依赖顺序协调 Topology、Log、Diagnosis、Repair 和 Report Agent；Repair Agent 只生成需人工批准的计划，不执行网络变更。
 
 
 ### 🔍 Agentic RAG Knowledge Retrieval
@@ -136,25 +138,23 @@ flowchart TB
 
     UI -->|HTTP + SSE| API[FastAPI Backend]
 
-    API --> Agent[LangGraph Agent Workflow]
+    API --> Supervisor[LangGraph Supervisor]
 
-    Agent --> Diagnosis[Diagnosis Workflow]
+    Supervisor --> TopologyAgent[Topology Agent]
+    Supervisor --> LogAgent[Log Agent]
+    Supervisor --> Diagnosis[Diagnosis Agent]
+    Supervisor --> Repair[Repair Agent]
+    Supervisor --> Report[Report Agent]
 
-    Diagnosis --> Tools[Network Tools]
-
+    TopologyAgent --> NX[NetworkX Topology]
+    LogAgent --> Logs[Redacted Logs]
+    Diagnosis --> Monitor[Device Metrics]
     Diagnosis --> RAG[RAG Knowledge Retrieval]
-
-    Tools --> NX[NetworkX Topology]
-
-    Tools --> Monitor[Device Metrics]
-
-    Tools --> Logs[Alarm Logs]
 
     RAG --> Chroma[(Chroma Vector Database)]
 
-    Diagnosis --> RCA[Root Cause Analysis]
-
-    RCA --> Report[Diagnosis Report]
+    Diagnosis --> Repair
+    Repair --> Report
 ```
 
 ## 🔄 Agent Workflow
@@ -216,7 +216,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-Ran 92 tests
+Ran 106 tests
 
 OK
 ```
@@ -236,9 +236,9 @@ Completed:
 - Automated Testing (92 tests)
 
 
-### v0.2.0 🚧 Multi-Agent Architecture
+### v0.2.0 ✅ Multi-Agent Architecture
 
-Planning:
+Completed:
 
 - Supervisor Agent
 - Diagnosis Agent
@@ -246,7 +246,9 @@ Planning:
 - Log Analysis Agent
 - Repair Agent
 - Report Agent
-- Agent collaboration and task delegation
+- Agent collaboration and dependency-aware task delegation
+- Shared typed state and bounded handoffs
+- Read-only repair planning with human-approval requirements
 
 
 ### v0.3.0 🚧 Network Digital Twin
@@ -310,6 +312,7 @@ Planning:
 当前版本已经实现：
 
 - 两套依赖注入式 LangGraph 工作流：通用七节点质量闭环与专用八节点网络诊断图；
+- v0.2.0 Supervisor Multi-Agent 图：按需协调 Topology、Log、Diagnosis、Repair 与 Report Agent；
 - 带文本层的 PDF、Markdown、TXT 文档加载，标题层级与 CLI 命令块保留；
 - BGE-M3 Embedding、Chroma 集合重建与语义检索；
 - 基于 NetworkX 的设备、关系、最短路径和双向接口查询；
@@ -319,7 +322,7 @@ Planning:
 - Streamlit 对话、引用文档、拓扑路径与固定设备指标快照展示；
 - Python `unittest` 自动测试及确定性 Embeddings test double 离线测试策略。
 
-当前版本是**只读诊断原型**，不连接真实网络设备，不执行接口重启、配置修改、模块更换或自动修复。真实 LLM、监控平台和知识源需要通过已有回调契约注入。
+当前版本是**只读诊断与修复规划原型**，不连接真实网络设备，不执行接口重启、配置修改、模块更换或自动修复。真实 LLM、监控平台和知识源需要通过已有回调契约注入。
 
 ### 当前限制与安全边界
 
@@ -447,7 +450,7 @@ Reasoning（推断）
 - 标准库 `unittest` 全量回归；
 - `compileall` 与 `pip check` 验证。
 
-Docker 和 CI/CD 尚未提供。
+Docker 尚未提供；仓库已有基础 GitHub Actions CI。
 
 ## 4. 系统架构
 
@@ -457,30 +460,26 @@ Docker 和 CI/CD 尚未提供。
 flowchart TB
     User[User / Network Operator] --> UI[Streamlit Console]
     UI -->|HTTP + SSE| API[FastAPI]
-    API --> Graph[Compiled LangGraph Workflow]
+    API --> Supervisor[Supervisor StateGraph]
 
-    Graph --> QA[QueryAnalyzer]
-    QA --> Next{{Conditional edge:<br/>next later required source}}
-    Next -->|topology| Topology[TopologyTool]
-    Next -->|monitoring| Monitoring[MonitorTool]
-    Next -->|logs| Logs[LogTool]
-    Next -->|knowledge| RAG[RAG]
-    Next -->|no source left| Correlator[EvidenceCorrelator]
+    Supervisor --> Topology[Topology Agent]
+    Supervisor --> Logs[Log Agent]
+    Supervisor --> Diagnosis[Diagnosis Agent]
+    Supervisor --> Repair[Repair Agent]
+    Supervisor --> Report[Report Agent]
 
-    Topology --> Next
-    Monitoring --> Next
-    Logs --> Next
-    RAG --> Next
+    Topology --> Supervisor
+    Logs --> Supervisor
+    Diagnosis --> Supervisor
+    Repair --> Supervisor
+    Report --> Supervisor
 
     Topology --> NX[(NetworkX Topology)]
-    Monitoring --> Snapshot[(Fixed Monitoring Snapshot)]
     Logs --> Redacted[(Redacted Log Snapshot)]
-    RAG --> Chroma[(Chroma + BGE-M3)]
 
-    Correlator --> Generator[Generator]
-    Generator --> Checker[HallucinationChecker]
-    Checker -->|Approved| API
-    Checker -->|Retry, max 3| Generator
+    Diagnosis --> Snapshot[(Fixed Monitoring Snapshot)]
+    Diagnosis --> Chroma[(Chroma + BGE-M3)]
+    Report --> API
 
     API --> History[(In-memory History)]
 ```
@@ -488,15 +487,16 @@ flowchart TB
 当前架构说明：
 
 - FastAPI 通过应用工厂接收已编译工作流；默认模块级应用不虚构 Agent，聊天接口会返回 HTTP 503；
-- 专用演示入口装配 NetworkX、固定监控/日志和 Chroma；
+- v0.1 专用演示入口保留原单 Agent 诊断图；v0.2 显式入口装配 Supervisor Multi-Agent、NetworkX、固定监控/日志和 Chroma；
 - 通用工作流允许部署方注入真实生成器、检查器和数据源；
-- 当前没有关系数据库、业务数据库、网络模拟器、真实设备客户端或多 Agent Supervisor；Chroma 当前采用清空同名集合后重新写入的集合重建模式，不支持增量索引。
+- 当前没有关系数据库、业务数据库、网络模拟器或真实设备客户端；Multi-Agent 采用单一共享状态图、顺序调度，不使用子图或并行 Agent。Chroma 当前采用清空同名集合后重新写入的集合重建模式，不支持增量索引。
 
 ## 5. 功能特性
 
 | 功能 | 状态 | 描述 |
 | --- | --- | --- |
 | LangGraph Agent Workflow | ✅ Current | 条件边、循环、有限重试和结构化错误终止 |
+| Supervisor Multi-Agent | ✅ Current | 依赖感知路由、共享 TypedDict 状态、有限交接和专业 Agent 降级处理 |
 | 网络拓扑建模 | ✅ Current | 从 JSON 加载设备与关系，查询最短路径、邻居和双向接口 |
 | 监控 Tool | ✅ Current | 查询固定设备、接口和告警快照 |
 | 日志 Tool | ✅ Current | 时间范围过滤、脱敏记录、证据引用和结构化错误 |
@@ -578,7 +578,7 @@ QueryAnalyzer
 | Persistence | 本地 Chroma 集合重建模式；会话历史为进程内存 |
 | Deployment | 本地 Python 进程；Docker 尚未实现 |
 
-项目当前**没有** SQLAlchemy、关系数据库、pytest、Ruff、Docker Compose 或 CI/CD 配置。
+项目当前**没有** SQLAlchemy、关系数据库、pytest、Ruff 或 Docker Compose；仓库已有基础 GitHub Actions CI。
 
 ## 9. 项目目录结构
 
@@ -595,6 +595,10 @@ QueryAnalyzer
 │       └── specs/
 ├── src/network_agent_rag/
 │   ├── agents/
+│   │   ├── multi_agent/
+│   │   │   ├── state.py
+│   │   │   ├── supervisor.py
+│   │   │   └── workflow.py
 │   │   ├── diagnosis_workflow.py
 │   │   ├── log_tools.py
 │   │   ├── monitoring_tools.py
@@ -617,6 +621,8 @@ QueryAnalyzer
 │   │   └── vector_store.py
 │   ├── demo.py
 │   ├── demo_main.py
+│   ├── multi_agent_demo.py
+│   ├── multi_agent_main.py
 │   └── main.py
 ├── tests/
 ├── .env.example
@@ -663,13 +669,13 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 - 标准库 `unittest` 回归测试；
 - 中文技术文档与可复现演示。
 
-CI/CD 属于 Detailed Roadmap，当前仓库尚未配置。
+仓库已配置 GitHub Actions CI；容器发布、静态检查和生产部署流水线仍属于后续规划。
 
 ## 11. Detailed Roadmap
 
-以下内容均为 **Planned**，不是当前实现。
+Phase 1 已在 v0.2.0 实现；其余阶段均为 **Planned**，不是当前实现。
 
-### Phase 1 — Supervisor Multi-Agent（Planned）
+### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
 - Supervisor Agent；
 - Diagnosis Agent；
@@ -677,7 +683,9 @@ CI/CD 属于 Detailed Roadmap，当前仓库尚未配置。
 - Log Agent；
 - Repair Agent；
 - Report Agent；
-- Agent 间任务委派、状态隔离和失败恢复。
+- Agent 间依赖感知任务委派、共享状态和失败降级；
+- Repair Agent 仅生成计划，不执行变更；
+- 首版为顺序单图，不包含并行、子图或 Checkpointer。
 
 ### Phase 2 — Network Digital Twin（Planned）
 
@@ -704,7 +712,7 @@ CI/CD 属于 Detailed Roadmap，当前仓库尚未配置。
 ### Phase 5 — Open Source Release（Planned）
 
 - Dockerfile 与 Docker Compose；
-- CI/CD、代码格式与静态检查；
+- 发布自动化、代码格式与静态检查；
 - 安全策略、贡献指南与 Issue 模板；
 - Chroma 增量索引与集合生命周期管理；
 - 可选真实 Prometheus/Zabbix/ELK/LLM 适配器。
@@ -765,7 +773,16 @@ uvicorn network_agent_rag.demo_main:app --host 127.0.0.1 --port 8000
 
 首次启动会下载 BGE-M3，并在 `data/chroma/sw1_sw2_demo/` 创建 Chroma 数据。当前实现会在每次初始化时清空并重建同名集合，不会执行增量索引；演示入口不建议开启 `--reload`，避免重复初始化模型和向量库。
 
-### 12.5 启动 Streamlit
+### 12.5 启动 v0.2 Multi-Agent 演示
+
+```powershell
+$env:PYTHONPATH = "src"
+uvicorn network_agent_rag.multi_agent_main:app --host 127.0.0.1 --port 8000
+```
+
+该入口保留与 v0.1 相同的 FastAPI/SSE 契约，但节点进度会显示 Supervisor、Topology、Log、Diagnosis、Repair 和 Report Agent。Repair Agent 只生成 `not_executed` 修复计划。
+
+### 12.6 启动 Streamlit
 
 保持 FastAPI 运行，在第二个终端执行：
 
@@ -784,7 +801,7 @@ streamlit run src/network_agent_rag/frontend/app.py
 SW1 到 SW2 链路丢包，请结合拓扑、日志和知识库分析
 ```
 
-### 12.6 调用 SSE API
+### 12.7 调用 SSE API
 
 ```bash
 curl -N -X POST http://127.0.0.1:8000/api/v1/chat \
@@ -798,7 +815,7 @@ curl -N -X POST http://127.0.0.1:8000/api/v1/chat \
 curl "http://127.0.0.1:8000/api/v1/history?session_id=demo-1"
 ```
 
-### 12.7 运行测试
+### 12.8 运行测试
 
 ```powershell
 $env:PYTHONPATH = "src"
@@ -809,7 +826,7 @@ python -m pip check
 
 测试使用确定性 Embeddings test double（包含轻量 FakeEmbeddings 实现），不下载 BGE-M3，也不会访问真实网络设备。
 
-### 12.8 Docker
+### 12.9 Docker
 
 当前仓库没有 Dockerfile 或 Docker Compose，暂不支持 Docker 启动。容器化发布已列入 Roadmap Phase 5。
 
