@@ -1,12 +1,286 @@
-# NetworkOps AI Agent
+# 🚀 NetworkOps AI Agent
 
-> 基于 LangGraph + RAG + Tool Calling 的企业网络智能运维 Agent。
+> 基于 LangGraph + Agentic RAG 的企业网络智能运维智能体平台
 
-[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-1.x-1C3C3C)](https://github.com/langchain-ai/langgraph)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.x-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
-![Project Status](https://img.shields.io/badge/status-prototype-orange)
+
+<p align="center">
+
+企业网络故障诊断 · 根因分析 · RAG知识检索 · Agent工作流
+
+</p>
+
+<p align="center">
+
+<img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
+<img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
+<img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
+<img src="https://img.shields.io/badge/Test-92%20passed-success?style=flat-square">
+
+</p>
+
+
+## ✨ Highlights
+
+### 🤖 LangGraph Agent Workflow
+
+基于 LangGraph 构建状态化网络运维 Agent 工作流：
+
+- AgentState 状态管理
+- 条件节点路由
+- Tool Calling 工具调用
+- 多步骤故障诊断流程
+- 根因分析与报告生成
+
+
+### 🔍 Agentic RAG Knowledge Retrieval
+
+结合网络运维知识库，实现：
+
+- Markdown / TXT / 文本型 PDF 文档加载
+- BGE-M3 Embedding
+- Chroma 向量检索
+- 故障案例匹配
+- 证据引用与知识辅助诊断
+
+
+### 🌐 Network Reasoning
+
+基于 NetworkX 构建网络拓扑分析能力：
+
+- 网络设备关系建模
+- 链路路径查询
+- 设备状态分析
+- 多源故障证据关联
+
+
+### 🧪 Engineering Quality
+
+面向工程化开发：
+
+- FastAPI 后端服务
+- Streamlit 可视化界面
+- unittest 自动化测试
+- GitHub Actions CI
+- Python 3.11 兼容
+
+
+### 🔐 Safety First
+
+当前系统采用只读诊断模式：
+
+- 不执行真实设备配置修改
+- 不直接执行网络命令
+- 高风险操作仅生成建议
+- 保留人工确认边界
+
+## 🎬 Demo
+
+
+### Network Fault Diagnosis
+
+
+输入故障描述：
+
+```text
+SW1 到 SW2 链路丢包，请结合拓扑、日志和知识库分析
+```
+
+Agent 执行流程：
+
+```text
+✓ Analyze network topology
+
+✓ Query device status
+
+✓ Retrieve operation knowledge
+
+✓ Correlate multi-source evidence
+
+✓ Generate root cause hypothesis
+
+✓ Produce diagnosis report
+```
+
+诊断输出：
+
+```text
+Root Cause:
+
+SW1-SW2 optical module degradation
+
+
+Evidence:
+
+- CRC error counter increasing
+- Low optical power detected
+- Interface abnormal logs found
+- Similar historical fault case retrieved
+
+
+Recommendation:
+
+Perform manual inspection during maintenance window.
+```
+
+---
+
+## 🏗 System Architecture
+
+
+NetworkOps AI Agent architecture:
+
+
+```mermaid
+flowchart TB
+    User[Network Operator] --> UI[Streamlit Console]
+
+    UI -->|HTTP + SSE| API[FastAPI Backend]
+
+    API --> Agent[LangGraph Agent Workflow]
+
+    Agent --> Diagnosis[Diagnosis Workflow]
+
+    Diagnosis --> Tools[Network Tools]
+
+    Diagnosis --> RAG[RAG Knowledge Retrieval]
+
+    Tools --> NX[NetworkX Topology]
+
+    Tools --> Monitor[Device Metrics]
+
+    Tools --> Logs[Alarm Logs]
+
+    RAG --> Chroma[(Chroma Vector Database)]
+
+    Diagnosis --> RCA[Root Cause Analysis]
+
+    RCA --> Report[Diagnosis Report]
+```
+
+## 🔄 Agent Workflow
+
+
+NetworkOps AI Agent uses LangGraph to build a stateful diagnosis workflow.
+
+
+### General Agentic RAG Workflow
+
+
+```text
+User Query
+
+    ↓
+
+Query Understanding
+
+    ↓
+
+Evidence Collection
+
+    ↓
+
+Network Topology Analysis
+
+    ↓
+
+Monitoring Data Analysis
+
+    ↓
+
+Log Analysis
+
+    ↓
+
+Knowledge Retrieval (RAG)
+
+    ↓
+
+Root Cause Analysis
+
+    ↓
+
+Diagnosis Report Generation
+```
+## 🧪 Test Result
+
+
+NetworkOps AI Agent includes automated tests for:
+
+- Agent workflow execution
+- Network diagnosis logic
+- RAG retrieval pipeline
+- API interfaces
+- Tool calling
+
+
+Current test status:
+
+```text
+Ran 92 tests
+
+OK
+```
+## 🚀 Roadmap
+
+
+### v0.1.0 ✅ Initial Release
+
+Completed:
+
+- LangGraph Agent Workflow
+- Agentic RAG Knowledge Retrieval
+- Network Fault Diagnosis Pipeline
+- NetworkX Topology Simulation
+- FastAPI Backend
+- Streamlit Demo
+- Automated Testing (92 tests)
+
+
+### v0.2.0 🚧 Multi-Agent Architecture
+
+Planning:
+
+- Supervisor Agent
+- Diagnosis Agent
+- Topology Agent
+- Log Analysis Agent
+- Repair Agent
+- Report Agent
+- Agent collaboration and task delegation
+
+
+### v0.3.0 🚧 Network Digital Twin
+
+Planning:
+
+- Dynamic network state simulation
+- Fault injection system
+- Device and link behavior modeling
+- Fault propagation analysis
+- Impact scope evaluation
+
+
+### v0.4.0 🚧 Autonomous Operations
+
+Planning:
+
+- Human-in-the-loop approval workflow
+- Safe repair execution
+- Operation audit logs
+- Recovery verification
+- Rollback mechanism
+
+
+### v1.0.0 🚧 Enterprise Platform
+
+Planning:
+
+- Multi-user support
+- Role-based access control
+- Persistent database
+- Docker deployment
+- Monitoring platform integration
+- Production environment adaptation
 
 **中文名称：** 企业网络智能运维 Agent 平台
 
@@ -27,7 +301,7 @@
 - [8. 技术栈](#8-技术栈)
 - [9. 项目目录结构](#9-项目目录结构)
 - [10. Engineering Skills](#10-engineering-skills)
-- [11. Roadmap](#11-roadmap)
+- [11. Detailed Roadmap](#11-detailed-roadmap)
 - [12. Quick Start](#12-quick-start)
 - [13. License](#13-license)
 
@@ -76,7 +350,7 @@ NetworkOps AI Agent 面向企业和校园网络运维场景，将知识检索、
 验证计划
 ```
 
-运行时审批、自动执行和真实恢复验证尚未实现，见 [Roadmap](#11-roadmap)。
+运行时审批、自动执行和真实恢复验证尚未实现，见 [Detailed Roadmap](#11-detailed-roadmap)。
 
 ## 2. 项目背景
 
@@ -389,9 +663,9 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 - 标准库 `unittest` 回归测试；
 - 中文技术文档与可复现演示。
 
-CI/CD 属于 Roadmap，当前仓库尚未配置。
+CI/CD 属于 Detailed Roadmap，当前仓库尚未配置。
 
-## 11. Roadmap
+## 11. Detailed Roadmap
 
 以下内容均为 **Planned**，不是当前实现。
 
