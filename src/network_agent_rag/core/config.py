@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +20,9 @@ class Settings(BaseSettings):
     checkpoint_backend: Literal["sqlite", "postgres", "redis"] = "sqlite"
     database_url: str | None = None
     redis_url: str | None = None
+    jwt_secret_key: SecretStr | None = None
+    jwt_algorithm: Literal["HS256"] = "HS256"
+    jwt_expire_minutes: int = Field(default=30, gt=0)
     approval_ttl_seconds: int = 1800
     langgraph_strict_msgpack: bool = True
 

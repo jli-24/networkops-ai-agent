@@ -14,8 +14,8 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.5.1--alpha-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-214%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.6.0-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Test-256%20passed-success?style=flat-square">
 
 </p>
 
@@ -111,11 +111,16 @@ v0.5.0-alpha 在不移除 SQLite 的前提下增加可插拔存储：
 Checkpoint、Trace 与 Audit 始终职责分离，不共用业务表。Redis 本阶段仅用于 Checkpointer，不提供 Session Cache、Agent Memory、Queue 或 Pub/Sub。该版本面向新部署，不迁移既有 SQLite 数据；默认后端仍是 SQLite，且 PostgreSQL/Redis 连接失败时不会静默回退。`Storage Health API` 计划在 v0.5.1 提供。
 
 
-### 🔐 RBAC Foundation Preview
+### 🔐 Authentication + RBAC
 
-v0.5.1-alpha Phase 1 提供严格的 `User` 模型、`Role` 与 `Permission` 定义，以及支持多角色权限合并的纯内存权限判断。
+v0.5.1 提供严格的 `User`、`Role`、`Permission` 与运行时 RBAC；v0.6.0 新增可选的 HS256 JWT Authentication Layer：
 
-当前 RBAC 仅作为权限模型基础，不代表 Enterprise API 已受到保护。项目尚未实现登录认证、JWT、OAuth2、用户数据库、API 权限中间件或审批人身份验证。
+- Bearer Token 经 PyJWT 验证后转换为 `UserIdentity → UserContext`；
+- 身份错误返回 401，权限不足继续返回 403；
+- 认证成功与失败写入现有脱敏 Audit Store；
+- 配置 `JWT_SECRET_KEY` 后 Enterprise 写操作启用认证，未配置时保留旧版本地兼容模式。
+
+当前不提供登录接口、密码存储、Refresh Token、撤销列表、OAuth2、LDAP、SSO 或用户数据库。JWT 认证也不替代 TLS、限流与严格 CORS；审批请求中的自由文本 `actor` 字段仍不是受认证身份来源。
 
 
 ### 🧪 Engineering Quality
@@ -439,8 +444,8 @@ Planning:
 
 - **PDF**：仅支持能够直接提取文本的文本型 PDF；不支持扫描 PDF，当前未集成 OCR。
 - **Chroma**：当前采用集合重建模式。每次创建向量库都会清空并重建同名集合，不是完整的增量式持久化知识库；增量索引与集合生命周期管理属于后续规划。
-- **API**：当前 FastAPI 接口仅用于本地演示，未实现用户认证、权限控制、限流或 CORS 策略。审批字段 `actor` 只是审计标签，不是经过认证的用户身份。禁止将当前服务直接暴露到公网或其他非可信网络。
-- **人工确认**：Enterprise Workflow 已实现 LangGraph `interrupt`、SQLite checkpoint 和 approve/reject 审计，但尚无用户认证、角色权限或审批人身份校验；旧工作流仍只生成基于规则的人工确认提示。
+- **API**：Enterprise 写操作可选择启用 JWT + RBAC，但当前仍无登录服务、Token 撤销、限流或 CORS 策略。审批字段 `actor` 只是业务审计标签，不是受认证身份来源。禁止将当前服务直接暴露到公网或其他非可信网络。
+- **人工确认**：Enterprise Workflow 已实现 LangGraph `interrupt`、checkpoint、approve/reject 审计与可选 JWT/RBAC 边界；审批载荷中的 `actor` 尚未与认证身份强绑定。旧工作流仍只生成基于规则的人工确认提示。
 - **SQLite**：Checkpointer、审计和 Trace Store 适用于单进程本地演示，不提供多 worker 协调或高可用；生产部署应迁移到适合并发工作负载的数据库或标准遥测后端。
 - **Observability**：`/metrics` 使用低基数标签；内置 Trace 仅记录递归键脱敏后的摘要和 hash。该实现不是防篡改审计或通用 DLP，自定义自由文本仍需调用方控制。当前没有 OTLP exporter、集中式时序数据库、跨服务追踪或长期保留策略。
 - **执行幂等性**：工作流不会自动重试 Execute，但 SQLite checkpoint 与外部变更不构成分布式事务。部署方注入的动作处理器必须以 `action_id` 实现幂等性并自行完成真实变更验证。
@@ -526,7 +531,7 @@ NetworkX / Fixed Monitoring Snapshot / Redacted Logs / Chroma
 - 默认检查器拒绝未知证据编号，以及“已自动执行”“自动执行修复”“已重启接口”“已更换光模块”“已修改配置”等越权表述；
 - 参数错误、未知设备和未知接口返回明确错误码。
 
-当前 API 仍未实现用户认证、权限控制、限流和 CORS 策略，仅限本地演示。Enterprise Workflow 已提供 SQLite 审计和白名单执行器契约，但没有内置真实动作处理器；审批人字段不能替代身份认证。
+Enterprise 写操作可通过 `JWT_SECRET_KEY` 启用 JWT + RBAC；未配置时保留本地 legacy 模式。当前仍无登录服务、Token 撤销、限流和 CORS 策略，也没有内置真实动作处理器；审批载荷中的 `actor` 字段不能替代 JWT 身份。
 
 ### 3.3 Evidence-based Diagnosis
 
@@ -557,7 +562,7 @@ v0.3.0 Enterprise Workflow 使用 SQLite Checkpointer 和 LangGraph `interrupt()
 | MEDIUM | 未强制审批；计划可显式要求人工批准 | 有限范围的演示变更 |
 | HIGH / CRITICAL | 必须暂停并等待摘要匹配的人工决策 | 任何可能影响网络服务的动作 |
 
-当前没有审批身份认证、RBAC 或内置真实网络执行器。`actor` 仅供审计记录；执行节点不会重试状态变更，且遇到首个失败动作立即停止。
+v0.6.0 可使用 JWT 身份和 RBAC 控制计划、审批与执行权限，但审批载荷中的 `actor` 仍只是业务审计标签，尚未与 JWT subject 强绑定。项目没有内置真实网络执行器；执行节点不会重试状态变更，且遇到首个失败动作立即停止。
 
 ### 3.5 Reproducibility
 
@@ -866,7 +871,7 @@ v0.6.0 规划：
 - 白名单执行器注入、单动作顺序执行和失败即停；
 - Agent、Tool、Decision、Approval 脱敏审计。
 
-限制：SQLite 仅适合单进程演示；没有用户认证、RBAC、真实设备处理器、自动验证或自动回退。
+限制：SQLite 仅适合单进程演示；v0.6.0 的 JWT/RBAC 为可选接入，仍没有登录服务、真实设备处理器、自动验证或自动回退。
 
 ### Phase 4 — Enterprise Observability（Completed in v0.4.0）
 
@@ -948,7 +953,7 @@ python -m pip install -e ".[dev]"
 uvicorn network_agent_rag.main:app --host 127.0.0.1 --port 8000
 ```
 
-基础入口提供健康检查和 OpenAPI，但没有注入工作流；调用聊天接口会返回 HTTP 503。当前 API 没有用户认证、权限控制、限流或 CORS 策略，仅用于本地演示，禁止直接暴露到公网或其他非可信网络。
+基础入口提供健康检查和 OpenAPI，但没有注入工作流；调用聊天接口会返回 HTTP 503。该基础入口没有认证、权限控制、限流或 CORS 策略，仅用于本地演示；JWT 只在 Enterprise 应用工厂中按需启用。
 
 ```text
 GET http://127.0.0.1:8000/api/v1/health
@@ -1037,7 +1042,7 @@ curl http://127.0.0.1:8000/api/v1/incidents/INC-1001
 curl http://127.0.0.1:8000/api/v1/incidents/INC-1001/audit
 ```
 
-`actor` 未经过身份认证，不能作为生产审批身份。真实执行器必须由部署方显式注入并在可信网络中使用。
+审批载荷中的 `actor` 未与 JWT subject 强绑定，不能单独作为生产审批身份。真实执行器必须由部署方显式注入并在可信网络中使用。
 
 ### 12.9 Observability 与 Benchmark
 

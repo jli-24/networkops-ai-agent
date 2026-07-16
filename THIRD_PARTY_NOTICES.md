@@ -17,6 +17,7 @@ NetworkOps AI Agent 的原创代码依据根目录 [MIT License](LICENSE) 发布
 | psycopg / psycopg-pool | 3.3.4 / 3.3.1 | LGPL-3.0-only | 条件兼容；动态使用与再分发时保留许可证并遵守 LGPL 要求 | [psycopg/psycopg](https://github.com/psycopg/psycopg/blob/master/LICENSE.txt) |
 | pydantic-settings | 2.14.2 | MIT | 兼容；保留版权与许可声明 | [pydantic/pydantic-settings](https://github.com/pydantic/pydantic-settings) |
 | Pydantic | 2.13.4 | MIT | 兼容；保留版权与许可声明 | [pydantic/pydantic](https://github.com/pydantic/pydantic/blob/main/LICENSE) |
+| PyJWT | 2.13.0 | MIT | 兼容；用于 HS256 JWT 签名与验证 | [jpadilla/pyjwt](https://github.com/jpadilla/pyjwt/blob/master/LICENSE) |
 | langchain-core | 1.4.9 | MIT | 兼容；保留版权与许可声明 | [langchain-ai/langchain](https://github.com/langchain-ai/langchain/blob/master/LICENSE) |
 | langchain-text-splitters | 1.1.2 | MIT | 兼容；保留版权与许可声明 | [langchain-ai/langchain](https://github.com/langchain-ai/langchain/blob/master/LICENSE) |
 | langchain-chroma | 1.1.0 | MIT | 兼容；这是 LangChain 适配包，不等同于 Chroma 引擎许可证 | [langchain-ai/langchain](https://github.com/langchain-ai/langchain/blob/master/LICENSE) |

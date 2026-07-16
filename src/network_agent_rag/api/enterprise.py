@@ -41,9 +41,17 @@ from network_agent_rag.api.observability import (
     observability_router,
 )
 from network_agent_rag.audit import SQLiteAuditLog
-from network_agent_rag.auth import AuthorizationError, Permission, UserContext
+from network_agent_rag.auth import (
+    AuthenticationError,
+    AuthenticationProvider,
+    AuthorizationError,
+    JWTProvider,
+    JWTTokenManager,
+    Permission,
+    UserContext,
+)
 from network_agent_rag.auth.dependencies import (
-    get_current_user_context,
+    current_user_dependency,
     require_permission as require_api_permission,
 )
 from network_agent_rag.core.config import Settings
@@ -105,10 +113,15 @@ def create_enterprise_app(
     benchmark_store: BenchmarkResultStore | None = None,
     clock: Callable[[], datetime] | None = None,
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
+    authentication_provider: AuthenticationProvider | None = None,
     user_context_provider: Callable[[Request], UserContext | None] | None = None,
 ) -> FastAPI:
     """Create an app with opt-in enterprise incident routes."""
 
+    if authentication_provider is not None and user_context_provider is not None:
+        raise ValueError(
+            "authentication_provider and user_context_provider are mutually exclusive"
+        )
     application = create_app(lifespan=lifespan)
     application.state.enterprise_workflow = agent_workflow
     application.state.audit_log = audit_log
@@ -123,7 +136,12 @@ def create_enterprise_app(
     )
     application.state.benchmark_store = benchmark_store
     application.state.enterprise_clock = clock or (lambda: datetime.now(timezone.utc))
+    application.state.authentication_provider = authentication_provider
     application.state.user_context_provider = user_context_provider
+    application.add_exception_handler(
+        AuthenticationError,
+        _authentication_error_response,
+    )
     application.add_exception_handler(
         AuthorizationError,
         _authorization_error_response,
@@ -145,6 +163,7 @@ def create_sqlite_enterprise_app(
     observability_path: str | Path | None = None,
     benchmark_results_path: str | Path | None = None,
     clock: Callable[[], datetime] | None = None,
+    authentication_provider: AuthenticationProvider | None = None,
     user_context_provider: Callable[[Request], UserContext | None] | None = None,
 ) -> FastAPI:
     """Create an app whose lifespan owns the async SQLite checkpointer."""
@@ -155,6 +174,11 @@ def create_sqlite_enterprise_app(
         )
 
     settings = Settings()
+    resolved_authentication = _resolve_authentication_provider(
+        settings,
+        authentication_provider,
+        user_context_provider,
+    )
     os.environ.setdefault(
         "LANGGRAPH_STRICT_MSGPACK",
         str(settings.langgraph_strict_msgpack).lower(),
@@ -198,6 +222,7 @@ def create_sqlite_enterprise_app(
     return create_enterprise_app(
         clock=clock,
         lifespan=lifespan,
+        authentication_provider=resolved_authentication,
         user_context_provider=user_context_provider,
     )
 
@@ -215,6 +240,7 @@ def create_storage_enterprise_app(
     observability_path: str | Path | None = None,
     benchmark_results_path: str | Path | None = None,
     clock: Callable[[], datetime] | None = None,
+    authentication_provider: AuthenticationProvider | None = None,
     user_context_provider: Callable[[Request], UserContext | None] | None = None,
 ) -> FastAPI:
     """Create an enterprise app with independently selected storage domains."""
@@ -224,6 +250,11 @@ def create_storage_enterprise_app(
             "configure exactly one of workflow_factory or observed_workflow_factory"
         )
     settings = Settings()
+    resolved_authentication = _resolve_authentication_provider(
+        settings,
+        authentication_provider,
+        user_context_provider,
+    )
     storage_name = storage_backend or settings.storage_backend
     checkpoint_name = checkpoint_backend or settings.checkpoint_backend
     if storage_name not in {"sqlite", "postgres"}:
@@ -287,6 +318,7 @@ def create_storage_enterprise_app(
     return create_enterprise_app(
         clock=clock,
         lifespan=lifespan,
+        authentication_provider=resolved_authentication,
         user_context_provider=user_context_provider,
     )
 
@@ -345,7 +377,7 @@ async def start_incident(
     request: Request,
     user_context: Annotated[
         UserContext | None,
-        Depends(get_current_user_context),
+        Depends(current_user_dependency),
     ],
 ) -> StreamingResponse:
     workflow = _workflow(request)
@@ -395,7 +427,7 @@ async def decide_approval(
     request: Request,
     user_context: Annotated[
         UserContext | None,
-        Depends(get_current_user_context),
+        Depends(current_user_dependency),
     ],
 ) -> StreamingResponse:
     workflow = _workflow(request)
@@ -768,6 +800,39 @@ async def _authorization_error_response(
     error: Exception,
 ) -> JSONResponse:
     return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+
+async def _authentication_error_response(
+    request: Request,
+    error: Exception,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=401,
+        content={"detail": "Unauthorized"},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _resolve_authentication_provider(
+    settings: Settings,
+    authentication_provider: AuthenticationProvider | None,
+    user_context_provider: Callable[[Request], UserContext | None] | None,
+) -> AuthenticationProvider | None:
+    if authentication_provider is not None and user_context_provider is not None:
+        raise ValueError(
+            "authentication_provider and user_context_provider are mutually exclusive"
+        )
+    if authentication_provider is not None or user_context_provider is not None:
+        return authentication_provider
+    if settings.jwt_secret_key is None:
+        return None
+    return JWTProvider(
+        JWTTokenManager(
+            settings.jwt_secret_key.get_secret_value(),
+            algorithm=settings.jwt_algorithm,
+            expire_minutes=settings.jwt_expire_minutes,
+        )
+    )
 
 
 def _sse(event: str, data: dict[str, object]) -> str:
