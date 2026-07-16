@@ -119,7 +119,7 @@ class MultiAgentWorkflowTests(unittest.TestCase):
         import network_agent_rag
         import network_agent_rag.agents as agents
 
-        self.assertEqual(network_agent_rag.__version__, "0.5.0a1")
+        self.assertEqual(network_agent_rag.__version__, "0.5.1a1")
         self.assertIs(agents.create_multi_agent_workflow, create_multi_agent_workflow)
         graph = self._graph()
         nodes = set(graph.get_graph().nodes)

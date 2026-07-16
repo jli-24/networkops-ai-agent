@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "networkops-ai-agent"
-version = "0.5.0a1"
+version = "0.5.1a1"
 description = "Enterprise network operations Agent powered by LangGraph and RAG"
 readme = "README.md"
 requires-python = ">=3.11"

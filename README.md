@@ -14,8 +14,8 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.5.0--alpha-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-206%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.5.1--alpha-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Test-214%20passed-success?style=flat-square">
 
 </p>
 
@@ -109,6 +109,13 @@ v0.5.0-alpha 在不移除 SQLite 的前提下增加可插拔存储：
 - 本地 Docker Compose 只启动 PostgreSQL 17 与 Redis 8 数据服务。
 
 Checkpoint、Trace 与 Audit 始终职责分离，不共用业务表。Redis 本阶段仅用于 Checkpointer，不提供 Session Cache、Agent Memory、Queue 或 Pub/Sub。该版本面向新部署，不迁移既有 SQLite 数据；默认后端仍是 SQLite，且 PostgreSQL/Redis 连接失败时不会静默回退。`Storage Health API` 计划在 v0.5.1 提供。
+
+
+### 🔐 RBAC Foundation Preview
+
+v0.5.1-alpha Phase 1 提供严格的 `User` 模型、`Role` 与 `Permission` 定义，以及支持多角色权限合并的纯内存权限判断。
+
+当前 RBAC 仅作为权限模型基础，不代表 Enterprise API 已受到保护。项目尚未实现登录认证、JWT、OAuth2、用户数据库、API 权限中间件或审批人身份验证。
 
 
 ### 🧪 Engineering Quality
@@ -273,7 +280,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-Ran 207 tests (206 passed, 1 optional PostgreSQL integration test skipped)
+Ran 215 tests (214 passed, 1 optional PostgreSQL integration test skipped)
 
 OK
 ```
