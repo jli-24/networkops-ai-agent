@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any, cast
 from typing_extensions import NotRequired, TypedDict
@@ -32,6 +32,13 @@ from network_agent_rag.agents.multi_agent.supervisor import validate_supervisor_
 from network_agent_rag.agents.multi_agent.topology_agent import run_topology_agent
 from network_agent_rag.agents.workflow import DocumentGradeResult
 from network_agent_rag.audit import AuditEventType
+from network_agent_rag.auth import (
+    AuthorizationError,
+    Permission,
+    UserContext,
+    authorizing_role,
+    require_permission,
+)
 from network_agent_rag.observability import (
     SpanKind,
     SpanStatus,
@@ -40,6 +47,14 @@ from network_agent_rag.observability import (
     TraceEventType,
 )
 from network_agent_rag.storage.base import AuditStore, TraceStore
+
+
+_AUTHORIZE_REPAIR_PLAN = "authorize_repair_plan"
+_AUTHORIZE_APPROVAL = "authorize_approval"
+_AUTHORIZE_EXECUTION = "authorize_execution"
+_AUTHORIZATION_ACTIONS = frozenset(
+    {_AUTHORIZE_REPAIR_PLAN, _AUTHORIZE_APPROVAL, _AUTHORIZE_EXECUTION}
+)
 
 
 class _EnterpriseInput(TypedDict):
@@ -252,6 +267,15 @@ def create_enterprise_workflow(
     def repair_agent(
         state: EnterpriseState, config: RunnableConfig
     ) -> dict[str, object]:
+        _authorize(
+            config,
+            stage="repair_plan",
+            permission=Permission.CREATE_REPAIR_PLAN,
+            action=_AUTHORIZE_REPAIR_PLAN,
+            audit_log=audit_log,
+            incident_id=state["incident_id"],
+        )
+
         def run(_parent_span_id: str | None) -> dict[str, object]:
             update = run_repair_agent(state, build_repair_plan)
             planning_state = cast(EnterpriseState, {**state, **update})
@@ -325,11 +349,13 @@ def create_enterprise_workflow(
             state["incident_id"],
             SpanKind.APPROVAL,
             "Approval",
-            lambda _span_id: _approval(state),
+            lambda _span_id: _approval(state, config),
             trace_collector=trace_collector,
         )
 
-    def _approval(state: EnterpriseState) -> dict[str, object]:
+    def _approval(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
         risk = state["risk_decision"]
         if risk is None:
             raise ValueError("risk_decision is required for approval")
@@ -355,6 +381,14 @@ def create_enterprise_workflow(
         )
         if not isinstance(payload, dict):
             raise ValueError("approval response must be a dictionary")
+        _authorize(
+            config,
+            stage="approval",
+            permission=Permission.APPROVE_REPAIR,
+            action=_AUTHORIZE_APPROVAL,
+            audit_log=audit_log,
+            incident_id=state["incident_id"],
+        )
         result = validate_approval(state, payload, now=now())
         _audit(
             audit_log,
@@ -379,6 +413,14 @@ def create_enterprise_workflow(
     def execute(
         state: EnterpriseState, config: RunnableConfig
     ) -> dict[str, object]:
+        _authorize(
+            config,
+            stage="execution",
+            permission=Permission.EXECUTE_REPAIR,
+            action=_AUTHORIZE_EXECUTION,
+            audit_log=audit_log,
+            incident_id=state["incident_id"],
+        )
         context = _collector_context(config)
         if trace_collector is not None and context is not None:
             actions = state["proposed_actions"]
@@ -810,6 +852,114 @@ def _collector_context(config: RunnableConfig) -> dict[str, str] | None:
     if not all(isinstance(item, str) and item for item in (trace_id, run_id)):
         return None
     return {"trace_id": trace_id, "run_id": run_id}
+
+
+def _authorize(
+    config: RunnableConfig,
+    *,
+    stage: str,
+    permission: Permission,
+    action: str,
+    audit_log: AuditStore | None,
+    incident_id: str,
+) -> None:
+    contexts = _rbac_contexts(config)
+    if contexts is not None and audit_log is None:
+        raise RuntimeError("audit_log is required for explicit RBAC mode")
+    if contexts is None and not _incident_uses_rbac(audit_log, incident_id):
+        return
+    context = contexts.get(stage) if contexts is not None else None
+    if context is None:
+        _audit_authorization(
+            audit_log,
+            incident_id=incident_id,
+            action=action,
+            outcome="denied",
+            actor_id="anonymous",
+            actor_role=None,
+            permission=permission,
+        )
+        raise AuthorizationError("anonymous", permission)
+
+    role = authorizing_role(context, permission)
+    try:
+        require_permission(context, permission)
+    except AuthorizationError:
+        _audit_authorization(
+            audit_log,
+            incident_id=incident_id,
+            action=action,
+            outcome="denied",
+            actor_id=context.user.user_id,
+            actor_role=context.user.roles[0].value,
+            permission=permission,
+        )
+        raise
+    _audit_authorization(
+        audit_log,
+        incident_id=incident_id,
+        action=action,
+        outcome="allowed",
+        actor_id=context.user.user_id,
+        actor_role=role.value if role is not None else None,
+        permission=permission,
+    )
+
+
+def _rbac_contexts(
+    config: RunnableConfig,
+) -> Mapping[str, UserContext] | None:
+    configurable = config.get("configurable", {})
+    if not isinstance(configurable, Mapping) or "rbac_contexts" not in configurable:
+        return None
+    contexts = configurable["rbac_contexts"]
+    if not isinstance(contexts, Mapping):
+        raise TypeError("rbac_contexts must be a mapping of phase names to UserContext")
+    if not all(
+        isinstance(key, str) and isinstance(value, UserContext)
+        for key, value in contexts.items()
+    ):
+        raise TypeError("rbac_contexts must be a mapping of phase names to UserContext")
+    return contexts
+
+
+def _incident_uses_rbac(
+    audit_log: AuditStore | None,
+    incident_id: str,
+) -> bool:
+    if audit_log is None:
+        return False
+    return any(
+        event.event_type == AuditEventType.DECISION
+        and event.actor == "authorization"
+        and event.action in _AUTHORIZATION_ACTIONS
+        for event in audit_log.list_events(incident_id)
+    )
+
+
+def _audit_authorization(
+    audit_log: AuditStore | None,
+    *,
+    incident_id: str,
+    action: str,
+    outcome: str,
+    actor_id: str,
+    actor_role: str | None,
+    permission: Permission,
+) -> None:
+    _audit(
+        audit_log,
+        incident_id=incident_id,
+        event_type=AuditEventType.DECISION,
+        actor="authorization",
+        action=action,
+        outcome=outcome,
+        details={
+            "actor_id": actor_id,
+            "actor_role": actor_role,
+            "required_permission": permission.value,
+        },
+    )
 
 
 def _tool_result_summary(action: str, result: object) -> dict[str, object]:

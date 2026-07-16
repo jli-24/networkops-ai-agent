@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from typing import Any
+
+from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
 
 class AuditEventType(StrEnum):
@@ -27,6 +29,23 @@ class AuditEvent(BaseModel):
     details: dict[str, object]
     created_at: AwareDatetime
     idempotency_key: str | None = None
+    actor_id: str | None = None
+    actor_role: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def project_actor_details(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        details = values.get("details")
+        if not isinstance(details, dict):
+            return values
+        projected = dict(values)
+        for field in ("actor_id", "actor_role"):
+            value = details.get(field)
+            if field not in projected and isinstance(value, str):
+                projected[field] = value
+        return projected
 
 
 __all__ = ["AuditEvent", "AuditEventType"]
