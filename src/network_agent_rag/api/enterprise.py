@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from contextlib import (
     AbstractAsyncContextManager,
     AsyncExitStack,
@@ -12,16 +12,16 @@ from contextlib import (
 )
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Annotated, Any, Protocol
 from uuid import uuid4
 import asyncio
 import hashlib
 import json
 import os
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from langgraph.types import Command
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
@@ -41,6 +41,11 @@ from network_agent_rag.api.observability import (
     observability_router,
 )
 from network_agent_rag.audit import SQLiteAuditLog
+from network_agent_rag.auth import AuthorizationError, Permission, UserContext
+from network_agent_rag.auth.dependencies import (
+    get_current_user_context,
+    require_permission as require_api_permission,
+)
 from network_agent_rag.core.config import Settings
 from network_agent_rag.main import create_app
 from network_agent_rag.observability import (
@@ -67,6 +72,11 @@ from network_agent_rag.storage.sqlite import (
 
 
 enterprise_router = APIRouter()
+_require_create_repair_plan = require_api_permission(
+    Permission.CREATE_REPAIR_PLAN
+)
+_require_approve_repair = require_api_permission(Permission.APPROVE_REPAIR)
+_require_execute_repair = require_api_permission(Permission.EXECUTE_REPAIR)
 
 
 class LegacyWorkflowFactory(Protocol):
@@ -95,6 +105,7 @@ def create_enterprise_app(
     benchmark_store: BenchmarkResultStore | None = None,
     clock: Callable[[], datetime] | None = None,
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
+    user_context_provider: Callable[[Request], UserContext | None] | None = None,
 ) -> FastAPI:
     """Create an app with opt-in enterprise incident routes."""
 
@@ -112,6 +123,11 @@ def create_enterprise_app(
     )
     application.state.benchmark_store = benchmark_store
     application.state.enterprise_clock = clock or (lambda: datetime.now(timezone.utc))
+    application.state.user_context_provider = user_context_provider
+    application.add_exception_handler(
+        AuthorizationError,
+        _authorization_error_response,
+    )
     application.include_router(enterprise_router, prefix=Settings().api_prefix)
     application.include_router(observability_router, prefix=Settings().api_prefix)
     application.include_router(enterprise_metrics_router, prefix=Settings().api_prefix)
@@ -129,6 +145,7 @@ def create_sqlite_enterprise_app(
     observability_path: str | Path | None = None,
     benchmark_results_path: str | Path | None = None,
     clock: Callable[[], datetime] | None = None,
+    user_context_provider: Callable[[Request], UserContext | None] | None = None,
 ) -> FastAPI:
     """Create an app whose lifespan owns the async SQLite checkpointer."""
 
@@ -178,7 +195,11 @@ def create_sqlite_enterprise_app(
             application.state.benchmark_store = benchmark_store
             yield
 
-    return create_enterprise_app(clock=clock, lifespan=lifespan)
+    return create_enterprise_app(
+        clock=clock,
+        lifespan=lifespan,
+        user_context_provider=user_context_provider,
+    )
 
 
 def create_storage_enterprise_app(
@@ -194,6 +215,7 @@ def create_storage_enterprise_app(
     observability_path: str | Path | None = None,
     benchmark_results_path: str | Path | None = None,
     clock: Callable[[], datetime] | None = None,
+    user_context_provider: Callable[[Request], UserContext | None] | None = None,
 ) -> FastAPI:
     """Create an enterprise app with independently selected storage domains."""
 
@@ -262,7 +284,11 @@ def create_storage_enterprise_app(
                 application.state.benchmark_store = benchmark_store
                 yield
 
-    return create_enterprise_app(clock=clock, lifespan=lifespan)
+    return create_enterprise_app(
+        clock=clock,
+        lifespan=lifespan,
+        user_context_provider=user_context_provider,
+    )
 
 
 @contextmanager
@@ -314,9 +340,22 @@ async def _checkpoint_context(
 
 
 @enterprise_router.post("/incidents", response_class=StreamingResponse)
-async def start_incident(payload: IncidentRequest, request: Request) -> StreamingResponse:
+async def start_incident(
+    payload: IncidentRequest,
+    request: Request,
+    user_context: Annotated[
+        UserContext | None,
+        Depends(get_current_user_context),
+    ],
+) -> StreamingResponse:
     workflow = _workflow(request)
     incident_id = payload.incident_id or uuid4().hex
+    request.state.authorization_incident_id = incident_id
+    user_context = await asyncio.to_thread(
+        _require_create_repair_plan,
+        request,
+        user_context,
+    )
     config = _config(incident_id)
     snapshot = await workflow.aget_state(config)
     if snapshot.values:
@@ -326,7 +365,17 @@ async def start_incident(payload: IncidentRequest, request: Request) -> Streamin
         "incident_id": incident_id,
         "session_id": payload.session_id,
     }
-    return _observed_stream_response(request, workflow, graph_input, incident_id)
+    return _observed_stream_response(
+        request,
+        workflow,
+        graph_input,
+        incident_id,
+        rbac_contexts=(
+            {"repair_plan": user_context, "execution": user_context}
+            if user_context is not None
+            else None
+        ),
+    )
 
 
 @enterprise_router.get(
@@ -344,12 +393,21 @@ async def decide_approval(
     incident_id: IncidentId,
     payload: ApprovalDecisionRequest,
     request: Request,
+    user_context: Annotated[
+        UserContext | None,
+        Depends(get_current_user_context),
+    ],
 ) -> StreamingResponse:
     workflow = _workflow(request)
     snapshot = await _snapshot(request, incident_id)
     values = dict(snapshot.values)
     status = values.get("enterprise_status")
     if status == "approved" and values.get("execution_result") is None:
+        execution_context = await asyncio.to_thread(
+            _require_execute_repair,
+            request,
+            user_context,
+        )
         _validate_execution_retry(
             values,
             payload,
@@ -361,9 +419,19 @@ async def decide_approval(
             None,
             incident_id,
             resume_status="execution_retry",
+            rbac_contexts=(
+                {"execution": execution_context}
+                if execution_context is not None
+                else None
+            ),
         )
     if status != "pending_approval":
         raise HTTPException(status_code=409, detail="Incident is not pending approval")
+    approval_context = await asyncio.to_thread(
+        _require_approve_repair,
+        request,
+        user_context,
+    )
     try:
         validate_approval(
             values,
@@ -373,7 +441,20 @@ async def decide_approval(
     except ApprovalConflict as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     command = Command(resume=payload.model_dump())
-    return _observed_stream_response(request, workflow, command, incident_id)
+    return _observed_stream_response(
+        request,
+        workflow,
+        command,
+        incident_id,
+        rbac_contexts=(
+            {
+                "approval": approval_context,
+                "execution": approval_context,
+            }
+            if approval_context is not None
+            else None
+        ),
+    )
 
 
 def _validate_execution_retry(
@@ -447,7 +528,7 @@ def _workflow(request: Request) -> Any:
 async def _stream_workflow(
     workflow: Any,
     graph_input: dict[str, object] | Command | None,
-    config: dict[str, dict[str, str]],
+    config: dict[str, dict[str, object]],
     incident_id: str,
     trace_store: TraceStore | None = None,
     workflow_span_id: str | None = None,
@@ -564,8 +645,14 @@ def _status_response(
     )
 
 
-def _config(incident_id: str) -> dict[str, dict[str, str]]:
-    return {"configurable": {"thread_id": incident_id}}
+def _config(
+    incident_id: str,
+    rbac_contexts: Mapping[str, UserContext] | None = None,
+) -> dict[str, dict[str, object]]:
+    configurable: dict[str, object] = {"thread_id": incident_id}
+    if rbac_contexts is not None:
+        configurable["rbac_contexts"] = rbac_contexts
+    return {"configurable": configurable}
 
 
 def _observed_stream_response(
@@ -575,10 +662,11 @@ def _observed_stream_response(
     incident_id: str,
     *,
     resume_status: str | None = None,
+    rbac_contexts: Mapping[str, UserContext] | None = None,
 ) -> StreamingResponse:
     trace_store = getattr(request.app.state, "trace_store", None)
     trace_collector = getattr(request.app.state, "trace_collector", None)
-    config = _config(incident_id)
+    config = _config(incident_id, rbac_contexts)
     if isinstance(graph_input, Command) or resume_status is not None:
         config["configurable"]["is_resume"] = "true"
     async def observed_stream() -> AsyncIterator[str]:
@@ -673,6 +761,13 @@ def _stream_response(stream: AsyncIterator[str]) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+async def _authorization_error_response(
+    request: Request,
+    error: Exception,
+) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": "Forbidden"})
 
 
 def _sse(event: str, data: dict[str, object]) -> str:
