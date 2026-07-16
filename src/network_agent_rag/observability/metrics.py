@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict, deque
+from collections.abc import Iterable
 from datetime import timezone
 from math import ceil, floor
 from typing import Protocol
@@ -10,6 +11,7 @@ from typing import Protocol
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from network_agent_rag.audit import AuditEventType
+from network_agent_rag.auth import Permission
 from network_agent_rag.observability.models import (
     SpanKind,
     SpanStatus,
@@ -99,6 +101,80 @@ class MetricsSnapshot(_MetricsModel):
     rag_retrievals: RagRetrievalSummary
     approval_waiting_time: LatencySummary
     repair_executions: RepairSummary
+
+
+class PermissionAuthorizationSummary(_MetricsModel):
+    permission: Permission
+    total: int = Field(ge=0)
+    allowed: int = Field(ge=0)
+    denied: int = Field(ge=0)
+    failure_rate_percent: float = Field(ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validate_summary(self) -> "PermissionAuthorizationSummary":
+        if self.total != self.allowed + self.denied:
+            raise ValueError("authorization total must equal decision counts")
+        expected = round(self.denied / self.total * 100, 2) if self.total else 0.0
+        if self.failure_rate_percent != expected:
+            raise ValueError("authorization failure rate does not match counts")
+        return self
+
+
+class AuthorizationMetrics(_MetricsModel):
+    authorization_total: int = Field(ge=0)
+    authorization_allowed: int = Field(ge=0)
+    authorization_denied: int = Field(ge=0)
+    authorization_failure_rate: float = Field(ge=0, le=100)
+    by_permission: tuple[PermissionAuthorizationSummary, ...]
+
+    @model_validator(mode="after")
+    def validate_summary(self) -> "AuthorizationMetrics":
+        if self.authorization_total != (
+            self.authorization_allowed + self.authorization_denied
+        ):
+            raise ValueError("authorization total must equal decision counts")
+        expected = (
+            round(self.authorization_denied / self.authorization_total * 100, 2)
+            if self.authorization_total
+            else 0.0
+        )
+        if self.authorization_failure_rate != expected:
+            raise ValueError("authorization failure rate does not match counts")
+        return self
+
+
+def summarize_authorization(
+    decisions: Iterable[tuple[Permission, str]],
+) -> AuthorizationMetrics:
+    counts = Counter(decisions)
+    by_permission: list[PermissionAuthorizationSummary] = []
+    for permission in Permission:
+        allowed = counts[(permission, "allowed")]
+        denied = counts[(permission, "denied")]
+        total = allowed + denied
+        by_permission.append(
+            PermissionAuthorizationSummary(
+                permission=permission,
+                total=total,
+                allowed=allowed,
+                denied=denied,
+                failure_rate_percent=(
+                    round(denied / total * 100, 2) if total else 0.0
+                ),
+            )
+        )
+    allowed_total = sum(item.allowed for item in by_permission)
+    denied_total = sum(item.denied for item in by_permission)
+    total = allowed_total + denied_total
+    return AuthorizationMetrics(
+        authorization_total=total,
+        authorization_allowed=allowed_total,
+        authorization_denied=denied_total,
+        authorization_failure_rate=(
+            round(denied_total / total * 100, 2) if total else 0.0
+        ),
+        by_permission=tuple(by_permission),
+    )
 
 
 class MetricsStore(Protocol):
@@ -413,12 +489,15 @@ def _rag_quality(spans: list[TraceSpan]) -> dict[str, float]:
 
 
 __all__ = [
+    "AuthorizationMetrics",
     "CallSummary",
     "LatencySummary",
     "MetricsService",
     "MetricsSnapshot",
     "MetricsStore",
+    "PermissionAuthorizationSummary",
     "RagRetrievalSummary",
     "RepairSummary",
     "SQLiteMetricsStore",
+    "summarize_authorization",
 ]

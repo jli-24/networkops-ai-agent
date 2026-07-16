@@ -47,5 +47,19 @@ class AuditEvent(BaseModel):
                 projected[field] = value
         return projected
 
+    @property
+    def trace_id(self) -> str | None:
+        """Return a stored trace reference without changing the audit schema."""
+
+        direct = self.details.get("trace_id")
+        if isinstance(direct, str) and direct.strip():
+            return direct.strip()
+        trace_event = self.details.get("trace_event")
+        if isinstance(trace_event, dict):
+            nested = trace_event.get("trace_id")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+        return None
+
 
 __all__ = ["AuditEvent", "AuditEventType"]

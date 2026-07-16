@@ -149,8 +149,8 @@ class RBACPermissionTests(unittest.TestCase):
         self.assertFalse(has_permission(object(), Permission.VIEW_INCIDENT))  # type: ignore[arg-type]
         self.assertFalse(has_permission(user, "VIEW_INCIDENT"))  # type: ignore[arg-type]
 
-    def test_package_version_is_0_5_1_alpha_1(self) -> None:
-        self.assertEqual(network_agent_rag.__version__, "0.5.1a1")
+    def test_package_version_is_0_5_1_release_candidate_1(self) -> None:
+        self.assertEqual(network_agent_rag.__version__, "0.5.1rc1")
 
 
 if __name__ == "__main__":

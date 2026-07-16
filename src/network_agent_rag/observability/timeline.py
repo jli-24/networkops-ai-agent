@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from network_agent_rag.observability.governance import project_governance_event
 from network_agent_rag.observability.models import TimelineEvent
 from network_agent_rag.storage.base import AuditStore, TraceStore
 
@@ -46,16 +47,33 @@ class IncidentTimelineBuilder:
                 )
         if self.audit_log is not None:
             for event in self.audit_log.list_events(incident_id):
+                governance = project_governance_event(event, self.trace_store)
                 events.append(
                     TimelineEvent(
                         event_id=event.event_id,
                         incident_id=incident_id,
                         source="audit",
-                        event_type=event.event_type.value,
+                        event_type=(
+                            "authorization"
+                            if governance is not None
+                            else event.event_type.value
+                        ),
                         name=event.action,
                         status=event.outcome,
                         timestamp=event.created_at,
-                        details={"actor": event.actor, **event.details},
+                        details=(
+                            {
+                                "actor": event.actor,
+                                "actor_id": governance.actor_id,
+                                "actor_role": governance.actor_role,
+                                "permission": governance.permission.value,
+                                "decision": governance.decision.value,
+                                "source": governance.source.value,
+                                "trace_id": governance.trace_id,
+                            }
+                            if governance is not None
+                            else {"actor": event.actor, **event.details}
+                        ),
                     )
                 )
         return sorted(events, key=lambda item: (item.timestamp, item.event_id))

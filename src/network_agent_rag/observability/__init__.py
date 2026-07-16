@@ -5,14 +5,22 @@ from network_agent_rag.observability.collector import (
     TracePersistenceError,
 )
 from network_agent_rag.observability.metrics import (
+    AuthorizationMetrics,
     CallSummary,
     LatencySummary,
     MetricsService,
     MetricsSnapshot,
     MetricsStore,
+    PermissionAuthorizationSummary,
     RagRetrievalSummary,
     RepairSummary,
     SQLiteMetricsStore,
+)
+from network_agent_rag.observability.governance import (
+    GovernanceDecision,
+    GovernanceEvent,
+    GovernanceQuery,
+    GovernanceSource,
 )
 from network_agent_rag.observability.models import (
     IncidentSummary,
@@ -29,13 +37,19 @@ from network_agent_rag.observability.timeline import IncidentTimelineBuilder
 from network_agent_rag.observability.trace import load_trace_events
 
 __all__ = [
+    "AuthorizationMetrics",
     "CallSummary",
+    "GovernanceDecision",
+    "GovernanceEvent",
+    "GovernanceQuery",
+    "GovernanceSource",
     "IncidentSummary",
     "IncidentTimelineBuilder",
     "LatencySummary",
     "MetricsService",
     "MetricsSnapshot",
     "MetricsStore",
+    "PermissionAuthorizationSummary",
     "RagRetrievalSummary",
     "RepairSummary",
     "SQLiteMetricsStore",
