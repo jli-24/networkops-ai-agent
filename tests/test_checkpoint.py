@@ -30,18 +30,27 @@ from tests.test_multi_agent_workflow import (
 NOW = datetime(2026, 7, 16, 8, 0, tzinfo=timezone.utc)
 
 
-def build_graph(checkpointer, audit: SQLiteAuditLog, calls: list[str]):
-    return create_enterprise_workflow(
-        checkpointer=checkpointer,
-        audit_log=audit,
-        plan_incident=lambda query, incident_id: incident_plan(),
-        retrieve_topology=topology,
-        retrieve_logs=logs,
-        retrieve_metrics=metrics,
-        retrieve_documents=documents,
-        grade_documents=grade,
-        rewrite_query=lambda state: f"{state['rewritten_query']} CRC",
-        plan_actions=lambda state: [
+def build_graph(
+    checkpointer,
+    audit: SQLiteAuditLog,
+    calls: list[str],
+    trace_store=None,
+    trace_collector=None,
+    **overrides,
+):
+    arguments = {
+        "checkpointer": checkpointer,
+        "audit_log": audit,
+        "trace_store": trace_store,
+        "trace_collector": trace_collector,
+        "plan_incident": lambda query, incident_id: incident_plan(),
+        "retrieve_topology": topology,
+        "retrieve_logs": logs,
+        "retrieve_metrics": metrics,
+        "retrieve_documents": documents,
+        "grade_documents": grade,
+        "rewrite_query": lambda state: f"{state['rewritten_query']} CRC",
+        "plan_actions": lambda state: [
             {
                 "action_id": "ACTION-1",
                 "tool_name": "digital_twin.update_link",
@@ -51,7 +60,7 @@ def build_graph(checkpointer, audit: SQLiteAuditLog, calls: list[str]):
                 "rollback_instructions": "restore previous status",
             }
         ],
-        action_executor=AllowlistedExecutor(
+        "action_executor": AllowlistedExecutor(
             {
                 "digital_twin.update_link": lambda item: calls.append(
                     item["action_id"]
@@ -59,8 +68,10 @@ def build_graph(checkpointer, audit: SQLiteAuditLog, calls: list[str]):
                 or {"status": "succeeded", "message": "link restored"}
             }
         ),
-        clock=lambda: NOW,
-    )
+        "clock": lambda: NOW,
+    }
+    arguments.update(overrides)
+    return create_enterprise_workflow(**arguments)
 
 
 class CheckpointTests(unittest.IsolatedAsyncioTestCase):
@@ -127,15 +138,53 @@ class CheckpointTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(second.values["incident_id"], "INC-2002")
                 self.assertNotEqual(first.values["user_query"], second.values["user_query"])
 
-    def test_app_lifespan_owns_sqlite_checkpointer(self) -> None:
+    def test_app_lifespan_supports_legacy_and_observed_factories(self) -> None:
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            create_sqlite_enterprise_app()
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            create_sqlite_enterprise_app(
+                workflow_factory=lambda saver, audit: object(),
+                observed_workflow_factory=lambda saver, **dependencies: object(),
+            )
+
         with TemporaryDirectory() as directory:
             checkpoint_path = Path(directory) / "checkpoints.sqlite3"
             audit_path = Path(directory) / "audit.sqlite3"
+            observability_path = Path(directory) / "observability.sqlite3"
+            benchmark_results_path = Path(directory) / "benchmark-results"
             calls: list[str] = []
+            received: dict[str, object] = {}
+
+            def observed_factory(
+                saver,
+                *,
+                audit_log=None,
+                trace_store=None,
+                metrics_store=None,
+                trace_collector=None,
+            ):
+                received.update(
+                    {
+                        "audit_log": audit_log,
+                        "trace_store": trace_store,
+                        "metrics_store": metrics_store,
+                        "trace_collector": trace_collector,
+                    }
+                )
+                return build_graph(
+                    saver,
+                    audit_log,
+                    calls,
+                    trace_store,
+                    trace_collector,
+                )
+
             app = create_sqlite_enterprise_app(
-                workflow_factory=lambda saver, audit: build_graph(saver, audit, calls),
+                observed_workflow_factory=observed_factory,
                 checkpoint_path=checkpoint_path,
                 audit_path=audit_path,
+                observability_path=observability_path,
+                benchmark_results_path=benchmark_results_path,
                 clock=lambda: NOW,
             )
 
@@ -151,6 +200,31 @@ class CheckpointTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(checkpoint_path.exists())
                 self.assertTrue(audit_path.exists())
+                self.assertTrue(observability_path.exists())
+                self.assertTrue(benchmark_results_path.is_dir())
+                self.assertIsNotNone(received["audit_log"])
+                self.assertIsNotNone(received["trace_store"])
+                self.assertIsNotNone(received["metrics_store"])
+                self.assertIsNotNone(received["trace_collector"])
+
+            legacy_default: list[object] = []
+
+            def legacy_factory(saver, audit, marker="legacy-default"):
+                legacy_default.append(marker)
+                return build_graph(saver, audit, [])
+
+            legacy_app = create_sqlite_enterprise_app(
+                workflow_factory=legacy_factory,
+                checkpoint_path=Path(directory) / "legacy-checkpoints.sqlite3",
+                audit_path=Path(directory) / "legacy-audit.sqlite3",
+                observability_path=Path(directory) / "legacy-observability.sqlite3",
+                benchmark_results_path=Path(directory) / "legacy-results",
+                clock=lambda: NOW,
+            )
+            with TestClient(legacy_app):
+                pass
+
+            self.assertEqual(legacy_default, ["legacy-default"])
 
 
 if __name__ == "__main__":

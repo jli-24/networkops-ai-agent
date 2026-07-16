@@ -6,7 +6,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 import json
 
@@ -44,13 +44,99 @@ class FastAPIClient:
             raise FrontendAPIError("INVALID_RESPONSE", "History response is invalid.")
         return payload
 
+    def list_incidents(
+        self,
+        *,
+        status: str | None = None,
+        risk_level: str | None = None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, object]:
+        parameters = {"limit": limit}
+        for key, value in (("status", status), ("risk_level", risk_level), ("cursor", cursor)):
+            if value is not None:
+                parameters[key] = value
+        return self._get_json("/api/v1/observability/incidents", parameters)
+
+    def get_incident(self, incident_id: str) -> dict[str, object]:
+        return self._get_json(f"/api/v1/incidents/{quote(incident_id, safe='')}")
+
+    def get_incident_audit(self, incident_id: str) -> dict[str, object]:
+        return self._get_json(f"/api/v1/incidents/{quote(incident_id, safe='')}/audit")
+
+    def get_incident_trace(self, incident_id: str) -> dict[str, object]:
+        return self._get_json(
+            f"/api/v1/observability/incidents/{quote(incident_id, safe='')}/trace"
+        )
+
+    def get_incident_timeline(self, incident_id: str) -> dict[str, object]:
+        return self._get_json(
+            f"/api/v1/observability/incidents/{quote(incident_id, safe='')}/timeline"
+        )
+
+    def get_metrics_summary(self) -> dict[str, object]:
+        return self._get_json("/api/v1/observability/metrics/summary")
+
+    def list_benchmark_runs(self) -> dict[str, object]:
+        return self._get_json("/api/v1/benchmarks/runs")
+
+    def get_benchmark_run(self, run_id: str) -> dict[str, object]:
+        return self._get_json(f"/api/v1/benchmarks/runs/{quote(run_id, safe='')}")
+
+    def stream_incident(
+        self,
+        session_id: str,
+        query: str,
+        incident_id: str | None = None,
+    ) -> Iterator[SSEEvent]:
+        payload: dict[str, object] = {"session_id": session_id, "query": query}
+        if incident_id is not None:
+            payload["incident_id"] = incident_id
+        return self._stream_json(
+            "/api/v1/incidents",
+            payload,
+            terminal_events={"answer", "approval_required", "error"},
+        )
+
+    def stream_approval(
+        self,
+        incident_id: str,
+        *,
+        decision: str,
+        actor: str,
+        plan_digest: str,
+        comment: str | None = None,
+    ) -> Iterator[SSEEvent]:
+        payload: dict[str, object] = {
+            "decision": decision,
+            "actor": actor,
+            "plan_digest": plan_digest,
+        }
+        if comment is not None:
+            payload["comment"] = comment
+        return self._stream_json(
+            f"/api/v1/incidents/{quote(incident_id, safe='')}/approval",
+            payload,
+            terminal_events={"answer", "error"},
+        )
+
     def stream_chat(self, session_id: str, query: str) -> Iterator[SSEEvent]:
-        body = json.dumps(
+        return self._stream_json(
+            "/api/v1/chat",
             {"session_id": session_id, "query": query},
-            ensure_ascii=False,
-        ).encode("utf-8")
+            terminal_events={"answer", "error"},
+        )
+
+    def _stream_json(
+        self,
+        path: str,
+        payload: dict[str, object],
+        *,
+        terminal_events: set[str],
+    ) -> Iterator[SSEEvent]:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = Request(
-            f"{self.base_url}/api/v1/chat",
+            f"{self.base_url}{path}",
             data=body,
             headers={
                 "Accept": "text/event-stream",
@@ -62,13 +148,23 @@ class FastAPIClient:
         terminal_event = False
         with response:
             for event in _parse_sse(response):
-                terminal_event = terminal_event or event.event in {"answer", "error"}
+                terminal_event = terminal_event or event.event in terminal_events
                 yield event
         if not terminal_event:
             raise FrontendAPIError(
                 "INCOMPLETE_STREAM",
                 "Agent stream ended without an answer.",
             )
+
+    def _get_json(
+        self,
+        path: str,
+        parameters: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        query = f"?{urlencode(parameters)}" if parameters else ""
+        response = self._open(Request(f"{self.base_url}{path}{query}"))
+        with response:
+            return _decode_json(response.read(), "INVALID_RESPONSE")
 
     def _open(self, request: Request) -> Any:
         try:

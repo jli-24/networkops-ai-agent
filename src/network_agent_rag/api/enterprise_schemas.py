@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from network_agent_rag.api.schemas import QueryText, SessionId
 from network_agent_rag.audit import AuditEvent
+from network_agent_rag.observability import TraceEvent
 
 
 IncidentId = Annotated[
@@ -57,9 +58,15 @@ class AuditResponse(_StrictModel):
     events: list[AuditEvent]
 
 
+class EnterpriseTraceResponse(_StrictModel):
+    incident_id: IncidentId
+    events: list[TraceEvent]
+
+
 __all__ = [
     "ApprovalDecisionRequest",
     "AuditResponse",
+    "EnterpriseTraceResponse",
     "IncidentId",
     "IncidentRequest",
     "IncidentStatusResponse",

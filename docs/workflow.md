@@ -63,6 +63,28 @@ Execute → Report → END
 
 The enterprise API uses `incident_id` as the LangGraph thread ID. Starting an incident streams node progress until either a final answer or an `approval_required` event. Approval resumes the same checkpoint with `Command(resume=...)`. Approval is valid only for the matching structured action digest and before its expiry.
 
+## v0.4.0 Observability Flow
+
+```text
+Enterprise API invocation
+    ↓
+Workflow Span (trace ID + run ID)
+    ↓
+Agent / Tool / Decision / Approval / Execute child Spans
+    ↓
+SQLite Trace Store (default) ──→ Metrics summary and /metrics
+    │
+    └── + Audit Log ──→ Incident Timeline
+                         ↓
+                    Streamlit Dashboard
+
+Agent / Tool / RAG / Approval / Resume / Execute lifecycle
+    ↓
+Sanitized Audit TraceEvent ──→ Enterprise Trace API
+```
+
+The pre-approval invocation and approval-resume invocation use different run IDs under the same incident trace. Benchmark evaluation runs offline through an injected `module:function` callback; only saved results are exposed to the Dashboard API.
+
 ## Output and Safety
 
 The Report Agent returns text through the chat API and Streamlit. It does not export a PDF or Markdown file. The Repair Agent only returns a `not_executed` plan with human-approval, verification, and rollback requirements.

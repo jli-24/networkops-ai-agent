@@ -1,5 +1,7 @@
 """Application settings."""
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +13,12 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     checkpoint_db_path: str = "data/enterprise/checkpoints.sqlite3"
     audit_db_path: str = "data/enterprise/audit.sqlite3"
+    observability_db_path: str = "data/enterprise/observability.sqlite3"
+    benchmark_results_path: str = "data/evaluations"
+    storage_backend: Literal["sqlite", "postgres"] = "sqlite"
+    checkpoint_backend: Literal["sqlite", "postgres", "redis"] = "sqlite"
+    database_url: str | None = None
+    redis_url: str | None = None
     approval_ttl_seconds: int = 1800
     langgraph_strict_msgpack: bool = True
 

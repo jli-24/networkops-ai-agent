@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from collections.abc import Iterator
 import json
 from pathlib import Path
+import re
 import sqlite3
 from threading import RLock
 from uuid import uuid4
@@ -14,7 +15,34 @@ from uuid import uuid4
 from network_agent_rag.audit.models import AuditEvent, AuditEventType
 
 
-_REDACTED_KEYS = {"api_key", "authorization", "password", "secret", "token"}
+_SAFE_SENSITIVE_SUFFIXES = ("_count", "_hash", "_sha256")
+_SENSITIVE_FRAGMENTS = {
+    "apikey",
+    "authorization",
+    "communitystring",
+    "cookie",
+    "credential",
+    "password",
+    "passwd",
+    "privatekey",
+    "secret",
+    "token",
+}
+_SENSITIVE_CONTENT_KEYS = {
+    "body",
+    "content",
+    "document",
+    "documents",
+    "documentbody",
+    "exceptionstack",
+    "pagecontent",
+    "prompt",
+    "rawbody",
+    "stack",
+    "stacktrace",
+    "systemprompt",
+    "traceback",
+}
 
 
 class SQLiteAuditLog:
@@ -62,7 +90,7 @@ class SQLiteAuditLog:
             actor=_required(actor, "actor"),
             action=_required(action, "action"),
             outcome=_required(outcome, "outcome"),
-            details=_redact(details or {}),
+            details=redact_sensitive(details or {}),
             created_at=datetime.now(timezone.utc),
             idempotency_key=idempotency_key,
         )
@@ -117,6 +145,25 @@ class SQLiteAuditLog:
                 for row in connection.execute(query, values).fetchall()
             ]
 
+    def list_all_events(
+        self,
+        *,
+        event_type: AuditEventType | str | None = None,
+    ) -> list[AuditEvent]:
+        query = """SELECT event_id, incident_id, event_type, actor, action,
+                          outcome, details, created_at, idempotency_key
+                   FROM audit_events"""
+        values: list[object] = []
+        if event_type is not None:
+            query += " WHERE event_type = ?"
+            values.append(AuditEventType(event_type).value)
+        query += " ORDER BY sequence"
+        with self._lock, self._connection() as connection:
+            return [
+                _event_from_row(row)
+                for row in connection.execute(query, values).fetchall()
+            ]
+
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.path, timeout=5.0)
@@ -134,16 +181,28 @@ def _required(value: str, name: str) -> str:
     return value.strip()
 
 
-def _redact(value: object) -> object:
+def is_sensitive_key(value: object, *, include_content: bool = True) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(value).lower()).strip("_")
+    if normalized.endswith(_SAFE_SENSITIVE_SUFFIXES):
+        return False
+    collapsed = normalized.replace("_", "")
+    return any(fragment in collapsed for fragment in _SENSITIVE_FRAGMENTS) or (
+        include_content and collapsed in _SENSITIVE_CONTENT_KEYS
+    )
+
+
+def redact_sensitive(value: object, *, include_content: bool = True) -> object:
     if isinstance(value, dict):
         return {
             str(key): "***REDACTED***"
-            if str(key).lower() in _REDACTED_KEYS
-            else _redact(item)
+            if is_sensitive_key(key, include_content=include_content)
+            else redact_sensitive(item, include_content=include_content)
             for key, item in value.items()
         }
-    if isinstance(value, list):
-        return [_redact(item) for item in value]
+    if isinstance(value, (list, tuple)):
+        return [
+            redact_sensitive(item, include_content=include_content) for item in value
+        ]
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     raise ValueError("audit details must contain only JSON-compatible values")
@@ -163,4 +222,4 @@ def _event_from_row(row: tuple[object, ...]) -> AuditEvent:
     )
 
 
-__all__ = ["SQLiteAuditLog"]
+__all__ = ["SQLiteAuditLog", "is_sensitive_key", "redact_sensitive"]

@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import (
+    AbstractAsyncContextManager,
+    AsyncExitStack,
+    ExitStack,
+    asynccontextmanager,
+    contextmanager,
+)
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
+import asyncio
+import hashlib
 import json
 import os
 
@@ -21,22 +29,70 @@ from network_agent_rag.agents.enterprise import ApprovalConflict, validate_appro
 from network_agent_rag.api.enterprise_schemas import (
     ApprovalDecisionRequest,
     AuditResponse,
+    EnterpriseTraceResponse,
     IncidentId,
     IncidentRequest,
     IncidentStatusResponse,
 )
+from network_agent_rag.api.benchmarks import benchmark_router
+from network_agent_rag.api.observability import (
+    enterprise_metrics_router,
+    metrics_router,
+    observability_router,
+)
 from network_agent_rag.audit import SQLiteAuditLog
 from network_agent_rag.core.config import Settings
 from network_agent_rag.main import create_app
+from network_agent_rag.observability import (
+    SQLiteTraceStore,
+    MetricsStore,
+    SQLiteMetricsStore,
+    SpanKind,
+    SpanStatus,
+    TraceCollector,
+    TracePersistenceError,
+    load_trace_events,
+)
+from network_agent_rag.evaluation import BenchmarkResultStore
+from network_agent_rag.storage.base import AuditStore, TraceStore
+from network_agent_rag.storage.postgres import (
+    open_postgres_checkpointer,
+    open_postgres_stores,
+)
+from network_agent_rag.storage.redis import open_redis_checkpointer
+from network_agent_rag.storage.sqlite import (
+    create_sqlite_stores,
+    open_sqlite_checkpointer,
+)
 
 
 enterprise_router = APIRouter()
 
 
+class LegacyWorkflowFactory(Protocol):
+    def __call__(self, checkpointer: Any, audit_log: AuditStore) -> Any: ...
+
+
+class ObservedWorkflowFactory(Protocol):
+    def __call__(
+        self,
+        checkpointer: Any,
+        *,
+        audit_log: AuditStore | None = None,
+        trace_store: TraceStore | None = None,
+        metrics_store: MetricsStore | None = None,
+        trace_collector: TraceCollector | None = None,
+    ) -> Any: ...
+
+
 def create_enterprise_app(
     *,
     agent_workflow: Any = None,
-    audit_log: SQLiteAuditLog | None = None,
+    audit_log: AuditStore | None = None,
+    trace_store: TraceStore | None = None,
+    trace_collector: TraceCollector | None = None,
+    metrics_store: MetricsStore | None = None,
+    benchmark_store: BenchmarkResultStore | None = None,
     clock: Callable[[], datetime] | None = None,
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
 ) -> FastAPI:
@@ -45,19 +101,41 @@ def create_enterprise_app(
     application = create_app(lifespan=lifespan)
     application.state.enterprise_workflow = agent_workflow
     application.state.audit_log = audit_log
+    application.state.trace_store = trace_store
+    application.state.trace_collector = trace_collector
+    application.state.metrics_store = (
+        metrics_store
+        if metrics_store is not None
+        else SQLiteMetricsStore(trace_store, audit_log)
+        if trace_store is not None
+        else None
+    )
+    application.state.benchmark_store = benchmark_store
     application.state.enterprise_clock = clock or (lambda: datetime.now(timezone.utc))
     application.include_router(enterprise_router, prefix=Settings().api_prefix)
+    application.include_router(observability_router, prefix=Settings().api_prefix)
+    application.include_router(enterprise_metrics_router, prefix=Settings().api_prefix)
+    application.include_router(benchmark_router, prefix=Settings().api_prefix)
+    application.include_router(metrics_router)
     return application
 
 
 def create_sqlite_enterprise_app(
     *,
-    workflow_factory: Callable[[Any, SQLiteAuditLog], Any],
+    workflow_factory: LegacyWorkflowFactory | None = None,
+    observed_workflow_factory: ObservedWorkflowFactory | None = None,
     checkpoint_path: str | Path | None = None,
     audit_path: str | Path | None = None,
+    observability_path: str | Path | None = None,
+    benchmark_results_path: str | Path | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     """Create an app whose lifespan owns the async SQLite checkpointer."""
+
+    if (workflow_factory is None) == (observed_workflow_factory is None):
+        raise ValueError(
+            "configure exactly one of workflow_factory or observed_workflow_factory"
+        )
 
     settings = Settings()
     os.environ.setdefault(
@@ -66,18 +144,173 @@ def create_sqlite_enterprise_app(
     )
     checkpoint = Path(checkpoint_path or settings.checkpoint_db_path)
     audit = Path(audit_path or settings.audit_db_path)
+    observability = Path(observability_path or settings.observability_db_path)
+    benchmark_results = Path(
+        benchmark_results_path or settings.benchmark_results_path
+    )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         checkpoint.parent.mkdir(parents=True, exist_ok=True)
         audit_log = SQLiteAuditLog(audit)
+        trace_store = SQLiteTraceStore(observability)
+        trace_collector = TraceCollector(audit_log)
+        metrics_store = SQLiteMetricsStore(trace_store, audit_log)
+        benchmark_store = BenchmarkResultStore(benchmark_results)
         async with AsyncSqliteSaver.from_conn_string(str(checkpoint)) as saver:
             await saver.setup()
-            application.state.enterprise_workflow = workflow_factory(saver, audit_log)
+            if observed_workflow_factory is not None:
+                workflow = observed_workflow_factory(
+                    saver,
+                    audit_log=audit_log,
+                    trace_store=trace_store,
+                    metrics_store=metrics_store,
+                    trace_collector=trace_collector,
+                )
+            else:
+                assert workflow_factory is not None
+                workflow = workflow_factory(saver, audit_log)
+            application.state.enterprise_workflow = workflow
             application.state.audit_log = audit_log
+            application.state.trace_store = trace_store
+            application.state.trace_collector = trace_collector
+            application.state.metrics_store = metrics_store
+            application.state.benchmark_store = benchmark_store
             yield
 
     return create_enterprise_app(clock=clock, lifespan=lifespan)
+
+
+def create_storage_enterprise_app(
+    *,
+    workflow_factory: LegacyWorkflowFactory | None = None,
+    observed_workflow_factory: ObservedWorkflowFactory | None = None,
+    storage_backend: str | None = None,
+    checkpoint_backend: str | None = None,
+    database_url: str | None = None,
+    redis_url: str | None = None,
+    checkpoint_path: str | Path | None = None,
+    audit_path: str | Path | None = None,
+    observability_path: str | Path | None = None,
+    benchmark_results_path: str | Path | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> FastAPI:
+    """Create an enterprise app with independently selected storage domains."""
+
+    if (workflow_factory is None) == (observed_workflow_factory is None):
+        raise ValueError(
+            "configure exactly one of workflow_factory or observed_workflow_factory"
+        )
+    settings = Settings()
+    storage_name = storage_backend or settings.storage_backend
+    checkpoint_name = checkpoint_backend or settings.checkpoint_backend
+    if storage_name not in {"sqlite", "postgres"}:
+        raise ValueError("storage backend must be sqlite or postgres")
+    if checkpoint_name not in {"sqlite", "postgres", "redis"}:
+        raise ValueError("checkpoint backend must be sqlite, postgres, or redis")
+    database = database_url if database_url is not None else settings.database_url
+    redis = redis_url if redis_url is not None else settings.redis_url
+    if (storage_name == "postgres" or checkpoint_name == "postgres") and not database:
+        raise ValueError("DATABASE_URL is required for PostgreSQL storage")
+    if checkpoint_name == "redis" and not redis:
+        raise ValueError("REDIS_URL is required for Redis checkpoint storage")
+
+    os.environ.setdefault(
+        "LANGGRAPH_STRICT_MSGPACK",
+        str(settings.langgraph_strict_msgpack).lower(),
+    )
+    checkpoint = Path(checkpoint_path or settings.checkpoint_db_path)
+    audit = Path(audit_path or settings.audit_db_path)
+    observability = Path(observability_path or settings.observability_db_path)
+    benchmark_results = Path(
+        benchmark_results_path or settings.benchmark_results_path
+    )
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        with _storage_context(
+            storage_name,
+            audit_path=audit,
+            trace_path=observability,
+            database_url=database,
+        ) as (audit_log, trace_store):
+            trace_collector = TraceCollector(audit_log)
+            metrics_store = SQLiteMetricsStore(trace_store, audit_log)
+            benchmark_store = BenchmarkResultStore(benchmark_results)
+            async with _checkpoint_context(
+                checkpoint_name,
+                sqlite_path=checkpoint,
+                database_url=database,
+                redis_url=redis,
+            ) as saver:
+                if observed_workflow_factory is not None:
+                    workflow = observed_workflow_factory(
+                        saver,
+                        audit_log=audit_log,
+                        trace_store=trace_store,
+                        metrics_store=metrics_store,
+                        trace_collector=trace_collector,
+                    )
+                else:
+                    assert workflow_factory is not None
+                    workflow = workflow_factory(saver, audit_log)
+                application.state.enterprise_workflow = workflow
+                application.state.audit_log = audit_log
+                application.state.trace_store = trace_store
+                application.state.trace_collector = trace_collector
+                application.state.metrics_store = metrics_store
+                application.state.benchmark_store = benchmark_store
+                yield
+
+    return create_enterprise_app(clock=clock, lifespan=lifespan)
+
+
+@contextmanager
+def _storage_context(
+    backend: str,
+    *,
+    audit_path: Path,
+    trace_path: Path,
+    database_url: str | None,
+) -> Iterator[tuple[AuditStore, TraceStore]]:
+    if backend == "sqlite":
+        yield create_sqlite_stores(audit_path, trace_path)
+        return
+    assert database_url is not None
+    stack = ExitStack()
+    try:
+        stores = stack.enter_context(open_postgres_stores(database_url))
+    except Exception:
+        stack.close()
+        raise RuntimeError("PostgreSQL storage initialization failed") from None
+    with stack:
+        yield stores
+
+
+@asynccontextmanager
+async def _checkpoint_context(
+    backend: str,
+    *,
+    sqlite_path: Path,
+    database_url: str | None,
+    redis_url: str | None,
+) -> AsyncIterator[Any]:
+    if backend == "sqlite":
+        context = open_sqlite_checkpointer(sqlite_path)
+    elif backend == "postgres":
+        assert database_url is not None
+        context = open_postgres_checkpointer(database_url)
+    else:
+        assert redis_url is not None
+        context = open_redis_checkpointer(redis_url)
+    stack = AsyncExitStack()
+    try:
+        saver = await stack.enter_async_context(context)
+    except Exception:
+        await stack.aclose()
+        raise RuntimeError(f"{backend.capitalize()} checkpoint initialization failed") from None
+    async with stack:
+        yield saver
 
 
 @enterprise_router.post("/incidents", response_class=StreamingResponse)
@@ -93,9 +326,7 @@ async def start_incident(payload: IncidentRequest, request: Request) -> Streamin
         "incident_id": incident_id,
         "session_id": payload.session_id,
     }
-    return _stream_response(
-        _stream_workflow(workflow, graph_input, config, incident_id)
-    )
+    return _observed_stream_response(request, workflow, graph_input, incident_id)
 
 
 @enterprise_router.get(
@@ -117,7 +348,21 @@ async def decide_approval(
     workflow = _workflow(request)
     snapshot = await _snapshot(request, incident_id)
     values = dict(snapshot.values)
-    if values.get("enterprise_status") != "pending_approval":
+    status = values.get("enterprise_status")
+    if status == "approved" and values.get("execution_result") is None:
+        _validate_execution_retry(
+            values,
+            payload,
+            now=request.app.state.enterprise_clock(),
+        )
+        return _observed_stream_response(
+            request,
+            workflow,
+            None,
+            incident_id,
+            resume_status="execution_retry",
+        )
+    if status != "pending_approval":
         raise HTTPException(status_code=409, detail="Incident is not pending approval")
     try:
         validate_approval(
@@ -127,11 +372,31 @@ async def decide_approval(
         )
     except ApprovalConflict as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
-    config = _config(incident_id)
     command = Command(resume=payload.model_dump())
-    return _stream_response(
-        _stream_workflow(workflow, command, config, incident_id)
-    )
+    return _observed_stream_response(request, workflow, command, incident_id)
+
+
+def _validate_execution_retry(
+    values: dict[str, object],
+    payload: ApprovalDecisionRequest,
+    *,
+    now: datetime,
+) -> None:
+    approval = values.get("approval_result")
+    risk = values.get("risk_decision")
+    if not isinstance(approval, dict) or not isinstance(risk, dict):
+        raise HTTPException(status_code=409, detail="Approved execution is unavailable")
+    if payload.decision != "approve":
+        raise HTTPException(status_code=409, detail="Approved execution requires approve")
+    if (
+        payload.plan_digest != approval.get("plan_digest")
+        or payload.plan_digest != risk.get("plan_digest")
+        or payload.actor != approval.get("actor")
+    ):
+        raise HTTPException(status_code=409, detail="Approval retry does not match")
+    expires_at = risk.get("expires_at")
+    if not isinstance(expires_at, datetime) or now > expires_at:
+        raise HTTPException(status_code=409, detail="Approval request has expired")
 
 
 @enterprise_router.get(
@@ -144,8 +409,25 @@ async def incident_audit(incident_id: IncidentId, request: Request) -> AuditResp
         raise HTTPException(status_code=503, detail="Audit log is not configured")
     return AuditResponse(
         incident_id=incident_id,
-        events=audit_log.list_events(incident_id),
+        events=await asyncio.to_thread(audit_log.list_events, incident_id),
     )
+
+
+@enterprise_router.get(
+    "/enterprise/incidents/{incident_id}/trace",
+    response_model=EnterpriseTraceResponse,
+)
+def enterprise_incident_trace(
+    incident_id: IncidentId,
+    request: Request,
+) -> EnterpriseTraceResponse:
+    audit_log = getattr(request.app.state, "audit_log", None)
+    if audit_log is None:
+        raise HTTPException(status_code=503, detail="Audit log is not configured")
+    events = load_trace_events(audit_log, incident_id)
+    if not events:
+        raise HTTPException(status_code=404, detail="Enterprise trace not found")
+    return EnterpriseTraceResponse(incident_id=incident_id, events=events)
 
 
 async def _snapshot(request: Request, incident_id: str) -> Any:
@@ -164,12 +446,42 @@ def _workflow(request: Request) -> Any:
 
 async def _stream_workflow(
     workflow: Any,
-    graph_input: dict[str, object] | Command,
+    graph_input: dict[str, object] | Command | None,
     config: dict[str, dict[str, str]],
     incident_id: str,
+    trace_store: TraceStore | None = None,
+    workflow_span_id: str | None = None,
+    trace_collector: TraceCollector | None = None,
+    resume_status: str | None = None,
 ) -> AsyncIterator[str]:
-    yield _sse("start", {"incident_id": incident_id})
+    configurable = config.get("configurable", {})
+    start_payload = {"incident_id": incident_id}
+    for field in ("trace_id", "run_id"):
+        if field in configurable:
+            start_payload[field] = configurable[field]
+    yield _sse("start", start_payload)
     try:
+        if trace_collector is not None and (
+            isinstance(graph_input, Command) or resume_status is not None
+        ):
+            trace_id = configurable.get("trace_id")
+            run_id = configurable.get("run_id")
+            if isinstance(trace_id, str) and isinstance(run_id, str):
+                resume_values = getattr(graph_input, "resume", None)
+                await asyncio.to_thread(
+                    trace_collector.resume,
+                    incident_id=incident_id,
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    agent_name="EnterpriseWorkflow",
+                    node_name="Approval",
+                    input_data=(
+                        {"decision": resume_values.get("decision")}
+                        if isinstance(resume_values, dict)
+                        else {"status": resume_status}
+                    ),
+                    attempt=1,
+                )
         async for chunk in workflow.astream(
             graph_input,
             config,
@@ -183,15 +495,46 @@ async def _stream_workflow(
                     yield _sse("node", {"incident_id": incident_id, "node": node})
         snapshot = await workflow.aget_state(config)
         if any(task.interrupts for task in snapshot.tasks):
+            await asyncio.to_thread(
+                _finish_workflow_span,
+                trace_store,
+                workflow_span_id,
+                SpanStatus.INTERRUPTED,
+            )
             return
         response = _status_response(incident_id, dict(snapshot.values))
+        await asyncio.to_thread(
+            _finish_workflow_span,
+            trace_store,
+            workflow_span_id,
+            SpanStatus.SUCCEEDED,
+        )
         yield _sse("answer", response.model_dump(mode="json"))
-    except Exception:
+    except asyncio.CancelledError:
+        await asyncio.to_thread(
+            _finish_workflow_span,
+            trace_store,
+            workflow_span_id,
+            SpanStatus.INTERRUPTED,
+        )
+        raise
+    except Exception as error:
+        await asyncio.to_thread(
+            _finish_workflow_span,
+            trace_store,
+            workflow_span_id,
+            SpanStatus.FAILED,
+            error,
+        )
         yield _sse(
             "error",
             {
                 "incident_id": incident_id,
-                "code": "ENTERPRISE_WORKFLOW_FAILED",
+                "code": (
+                    "TRACE_PERSISTENCE_FAILED"
+                    if isinstance(error, TracePersistenceError)
+                    else "ENTERPRISE_WORKFLOW_FAILED"
+                ),
                 "message": "Enterprise workflow execution failed.",
             },
         )
@@ -225,6 +568,105 @@ def _config(incident_id: str) -> dict[str, dict[str, str]]:
     return {"configurable": {"thread_id": incident_id}}
 
 
+def _observed_stream_response(
+    request: Request,
+    workflow: Any,
+    graph_input: dict[str, object] | Command | None,
+    incident_id: str,
+    *,
+    resume_status: str | None = None,
+) -> StreamingResponse:
+    trace_store = getattr(request.app.state, "trace_store", None)
+    trace_collector = getattr(request.app.state, "trace_collector", None)
+    config = _config(incident_id)
+    if isinstance(graph_input, Command) or resume_status is not None:
+        config["configurable"]["is_resume"] = "true"
+    async def observed_stream() -> AsyncIterator[str]:
+        workflow_span_id = None
+        trace_id = None
+        run_id = None
+        if trace_store is not None or trace_collector is not None:
+            trace_id = (
+                await asyncio.to_thread(
+                    trace_store.trace_id_for_incident,
+                    incident_id,
+                )
+                if trace_store is not None
+                else await asyncio.to_thread(
+                    _audit_trace_id,
+                    trace_collector,
+                    incident_id,
+                )
+            ) or uuid4().hex
+            run_id = uuid4().hex
+            config["configurable"].update(
+                {
+                    "trace_id": trace_id,
+                    "run_id": run_id,
+                }
+            )
+        if trace_store is not None and trace_id is not None and run_id is not None:
+            span = await asyncio.to_thread(
+                trace_store.start_span,
+                trace_id=trace_id,
+                run_id=run_id,
+                incident_id=incident_id,
+                kind=SpanKind.WORKFLOW,
+                name="EnterpriseWorkflow",
+                input_summary_hash=_workflow_digest(
+                    incident_id, type(graph_input).__name__, "started"
+                ),
+            )
+            workflow_span_id = span.span_id
+            config["configurable"]["workflow_span_id"] = workflow_span_id
+        async for event in _stream_workflow(
+            workflow,
+            graph_input,
+            config,
+            incident_id,
+            trace_store=trace_store,
+            trace_collector=trace_collector,
+            workflow_span_id=workflow_span_id,
+            resume_status=resume_status,
+        ):
+            yield event
+
+    return _stream_response(
+        observed_stream()
+    )
+
+
+def _audit_trace_id(
+    trace_collector: TraceCollector | None,
+    incident_id: str,
+) -> str | None:
+    if trace_collector is None:
+        return None
+    events = load_trace_events(trace_collector.audit_log, incident_id)
+    return events[0].trace_id if events else None
+
+
+def _finish_workflow_span(
+    trace_store: TraceStore | None,
+    span_id: str | None,
+    status: SpanStatus,
+    error: Exception | None = None,
+) -> None:
+    if trace_store is not None and span_id is not None:
+        trace_store.finish_span(
+            span_id,
+            status=status,
+            error_code=type(error).__name__ if error is not None else None,
+            output_summary_hash=_workflow_digest(
+                span_id, status.value, type(error).__name__ if error is not None else ""
+            ),
+        )
+
+
+def _workflow_digest(*values: str) -> str:
+    return hashlib.sha256("\0".join(values).encode("utf-8")).hexdigest()
+
+
 def _stream_response(stream: AsyncIterator[str]) -> StreamingResponse:
     return StreamingResponse(
         stream,
@@ -241,7 +683,10 @@ def _sse(event: str, data: dict[str, object]) -> str:
 
 
 __all__ = [
+    "LegacyWorkflowFactory",
+    "ObservedWorkflowFactory",
     "create_enterprise_app",
     "create_sqlite_enterprise_app",
+    "create_storage_enterprise_app",
     "enterprise_router",
 ]

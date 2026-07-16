@@ -74,6 +74,51 @@ class SSEParserTests(TestCase):
 
 class FastAPIClientTests(TestCase):
     @patch("network_agent_rag.frontend.client.urlopen")
+    def test_enterprise_incident_and_observability_requests(self, urlopen) -> None:
+        urlopen.side_effect = [
+            _Response(b'{"items":[{"incident_id":"INC-1"}],"next_cursor":null}'),
+            _Response(b'{"incident_id":"INC-1","spans":[]}'),
+            _Response(
+                b"event: start\ndata: {\"incident_id\":\"INC-1\"}\n\n"
+                b"event: approval_required\ndata: {\"plan_digest\":\"abc\"}\n\n"
+            ),
+            _Response(
+                b"event: start\ndata: {\"incident_id\":\"INC-1\"}\n\n"
+                b"event: answer\ndata: {\"answer\":\"done\"}\n\n"
+            ),
+        ]
+        client = FastAPIClient("http://agent.local")
+
+        incidents = client.list_incidents(status="interrupted", limit=20)
+        trace = client.get_incident_trace("INC-1")
+        started = list(client.stream_incident("session-1", "diagnose", "INC-1"))
+        resumed = list(
+            client.stream_approval(
+                "INC-1",
+                decision="approve",
+                actor="noc-operator",
+                plan_digest="abc",
+            )
+        )
+
+        requests = [call.args[0] for call in urlopen.call_args_list]
+        self.assertIn("status=interrupted", requests[0].full_url)
+        self.assertIn("limit=20", requests[0].full_url)
+        self.assertEqual(
+            requests[1].full_url,
+            "http://agent.local/api/v1/observability/incidents/INC-1/trace",
+        )
+        self.assertEqual(
+            json.loads(requests[2].data),
+            {"session_id": "session-1", "query": "diagnose", "incident_id": "INC-1"},
+        )
+        self.assertEqual(json.loads(requests[3].data)["decision"], "approve")
+        self.assertEqual(incidents["items"][0]["incident_id"], "INC-1")
+        self.assertEqual(trace["incident_id"], "INC-1")
+        self.assertEqual(started[-1].event, "approval_required")
+        self.assertEqual(resumed[-1].event, "answer")
+
+    @patch("network_agent_rag.frontend.client.urlopen")
     def test_get_history_encodes_session_and_returns_json(self, urlopen) -> None:
         urlopen.return_value = _Response(
             b'{"session_id":"demo:1","messages":[{"role":"user","content":"hi"}]}'
@@ -186,18 +231,79 @@ class StreamlitAppTests(TestCase):
             self.assertIn(node, NODE_LABELS)
             self.assertTrue(NODE_LABELS[node])
 
+    def test_maps_enterprise_nodes_to_progress_labels(self) -> None:
+        for node in ("RiskCheck", "Approval", "Execute"):
+            self.assertIn(node, NODE_LABELS)
+            self.assertTrue(NODE_LABELS[node])
+
     def test_renders_single_page_console_without_calling_the_backend(self) -> None:
         app = AppTest.from_file(str(self.app_path)).run()
 
         self.assertEqual(list(app.exception), [])
         self.assertEqual(app.title[0].value, "企业网络智能运维 Agent")
-        self.assertEqual(
-            [heading.value for heading in app.subheader],
-            ["AI 对话", "引用文档", "网络拓扑路径", "实时设备状态"],
-        )
-        self.assertEqual(len(app.text_input), 2)
-        self.assertEqual(len(app.button), 1)
+        headings = [heading.value for heading in app.subheader]
+        for heading in ("AI 对话", "引用文档", "网络拓扑路径", "实时设备状态"):
+            self.assertIn(heading, headings)
+        self.assertGreaterEqual(len(app.text_input), 2)
+        self.assertGreaterEqual(len(app.button), 1)
         self.assertEqual(len(app.chat_input), 1)
+
+    def test_renders_enterprise_observability_and_benchmark_tabs(self) -> None:
+        app = AppTest.from_file(str(self.app_path)).run()
+        app.session_state["observed_incidents"] = [
+            {
+                "incident_id": "INC-1",
+                "status": "interrupted",
+                "risk_level": "high",
+                "span_count": 4,
+            }
+        ]
+        app.session_state["selected_trace"] = {
+            "spans": [
+                {
+                    "name": "DiagnosisAgent",
+                    "kind": "agent",
+                    "status": "succeeded",
+                    "duration_ms": 12.0,
+                }
+            ]
+        }
+        app.session_state["selected_timeline"] = {
+            "events": [
+                {
+                    "timestamp": "2026-07-16T08:00:00Z",
+                    "name": "DiagnosisAgent",
+                    "event_type": "span_completed",
+                    "status": "succeeded",
+                }
+            ]
+        }
+        app.session_state["metrics_summary"] = {
+            "incidents_total": 1,
+            "pending_approvals": 1,
+            "spans_total": 4,
+            "spans_by_status": {"succeeded": 3, "interrupted": 1},
+        }
+        app.session_state["benchmark_runs"] = [
+            {
+                "run_id": "run-1",
+                "dataset_name": "network-cases",
+                "dataset_version": "1",
+                "summary": {"pass_rate": 1.0, "duration_ms_p95": 120.0},
+            }
+        ]
+
+        app.run()
+
+        self.assertEqual(list(app.exception), [])
+        self.assertEqual(
+            [tab.label for tab in app.tabs],
+            ["对话", "事件", "可观测性", "评测"],
+        )
+        headings = [heading.value for heading in app.subheader]
+        for heading in ("事件管理", "Agent Execution Trace", "Incident Timeline", "Benchmark Evaluation"):
+            self.assertIn(heading, headings)
+        self.assertGreaterEqual(len(app.dataframe), 4)
 
     def test_renders_latest_answer_sources_path_metrics_and_interfaces(self) -> None:
         app = AppTest.from_file(str(self.app_path)).run()
@@ -310,10 +416,14 @@ class StreamlitAppTests(TestCase):
             b'{"role":"assistant","content":"Saved answer"}]}'
         )
         app = AppTest.from_file(str(self.app_path)).run()
-        app.text_input[0].set_value("http://agent.local")
-        app.text_input[1].set_value("saved:1")
+        next(item for item in app.text_input if item.label == "FastAPI 地址").set_value(
+            "http://agent.local"
+        )
+        next(item for item in app.text_input if item.label == "会话 ID").set_value(
+            "saved:1"
+        )
 
-        app.button[0].click().run()
+        next(item for item in app.button if item.label == "连接并加载会话").click().run()
 
         self.assertEqual(list(app.exception), [])
         self.assertEqual(app.session_state["active_session_id"], "saved:1")

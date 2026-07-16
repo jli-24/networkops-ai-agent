@@ -7,8 +7,11 @@ from datetime import datetime, timezone
 from typing import Any, cast
 from typing_extensions import NotRequired, TypedDict
 from uuid import uuid4
+import hashlib
+import json
 
 from langchain_core.documents import Document
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import RetryPolicy, interrupt
@@ -28,7 +31,15 @@ from network_agent_rag.agents.multi_agent.state import (
 from network_agent_rag.agents.multi_agent.supervisor import validate_supervisor_plan
 from network_agent_rag.agents.multi_agent.topology_agent import run_topology_agent
 from network_agent_rag.agents.workflow import DocumentGradeResult
-from network_agent_rag.audit import AuditEventType, SQLiteAuditLog
+from network_agent_rag.audit import AuditEventType
+from network_agent_rag.observability import (
+    SpanKind,
+    SpanStatus,
+    TraceCollector,
+    TraceEventStatus,
+    TraceEventType,
+)
+from network_agent_rag.storage.base import AuditStore, TraceStore
 
 
 class _EnterpriseInput(TypedDict):
@@ -41,7 +52,9 @@ def create_enterprise_workflow(
     *,
     checkpointer: Any,
     plan_incident: Callable[[str, str], SupervisorPlan],
-    audit_log: SQLiteAuditLog | None = None,
+    audit_log: AuditStore | None = None,
+    trace_store: TraceStore | None = None,
+    trace_collector: TraceCollector | None = None,
     retrieve_topology: Callable[[DiagnosisPlan], dict[str, object]] | None = None,
     retrieve_logs: Callable[[DiagnosisPlan], dict[str, object]] | None = None,
     retrieve_metrics: Callable[
@@ -73,7 +86,18 @@ def create_enterprise_workflow(
         retry_on=(ConnectionError, TimeoutError),
     )
 
-    def initialize(raw_state: _EnterpriseInput) -> dict[str, object]:
+    def initialize(raw_state: _EnterpriseInput, config: RunnableConfig) -> dict[str, object]:
+        return _trace_call(
+            trace_store,
+            config,
+            str(raw_state.get("incident_id") or "pending"),
+            SpanKind.AGENT,
+            "Supervisor",
+            lambda _span_id: _initialize(raw_state),
+            trace_collector=trace_collector,
+        )
+
+    def _initialize(raw_state: _EnterpriseInput) -> dict[str, object]:
         query = raw_state.get("user_query", "")
         if not isinstance(query, str) or not query.strip():
             raise ValueError("user_query must be a non-empty string")
@@ -133,63 +157,102 @@ def create_enterprise_workflow(
             "enterprise_status": "running",
         }
 
-    def topology_agent(state: EnterpriseState) -> dict[str, object]:
-        callback = _tool_callback(
-            retrieve_topology,
-            audit_log,
-            state["incident_id"],
-            "query_topology",
-        )
+    def topology_agent(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
         return _agent_call(
             audit_log,
             state["incident_id"],
             "TopologyAgent",
-            lambda: run_topology_agent(state, callback),
+            lambda parent_span_id: run_topology_agent(
+                state,
+                _tool_callback(
+                    retrieve_topology,
+                    audit_log,
+                    state["incident_id"],
+                    "query_topology",
+                    agent_name="TopologyAgent",
+                    trace_store=trace_store,
+                    trace_collector=trace_collector,
+                    config=config,
+                    parent_span_id=parent_span_id,
+                ),
+            ),
+            trace_store=trace_store,
+            trace_collector=trace_collector,
+            config=config,
         )
 
-    def log_agent(state: EnterpriseState) -> dict[str, object]:
-        callback = _tool_callback(
-            retrieve_logs,
-            audit_log,
-            state["incident_id"],
-            "query_logs",
-        )
+    def log_agent(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
         return _agent_call(
             audit_log,
             state["incident_id"],
             "LogAgent",
-            lambda: run_log_agent(state, callback),
+            lambda parent_span_id: run_log_agent(
+                state,
+                _tool_callback(
+                    retrieve_logs,
+                    audit_log,
+                    state["incident_id"],
+                    "query_logs",
+                    agent_name="LogAgent",
+                    trace_store=trace_store,
+                    trace_collector=trace_collector,
+                    config=config,
+                    parent_span_id=parent_span_id,
+                ),
+            ),
+            trace_store=trace_store,
+            trace_collector=trace_collector,
+            config=config,
         )
 
-    def diagnosis_agent(state: EnterpriseState) -> dict[str, object]:
-        metrics_callback = _tool_callback(
-            retrieve_metrics,
-            audit_log,
-            state["incident_id"],
-            "query_metrics",
-        )
-        documents_callback = _tool_callback(
-            retrieve_documents,
-            audit_log,
-            state["incident_id"],
-            "search_knowledge",
-        )
+    def diagnosis_agent(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
         return _agent_call(
             audit_log,
             state["incident_id"],
             "DiagnosisAgent",
-            lambda: run_diagnosis_agent(
+            lambda parent_span_id: run_diagnosis_agent(
                 state,
-                retrieve_metrics=metrics_callback,
-                retrieve_documents=documents_callback,
+                retrieve_metrics=_tool_callback(
+                    retrieve_metrics,
+                    audit_log,
+                    state["incident_id"],
+                    "query_metrics",
+                    agent_name="DiagnosisAgent",
+                    trace_store=trace_store,
+                    trace_collector=trace_collector,
+                    config=config,
+                    parent_span_id=parent_span_id,
+                ),
+                retrieve_documents=_tool_callback(
+                    retrieve_documents,
+                    audit_log,
+                    state["incident_id"],
+                    "search_knowledge",
+                    agent_name="DiagnosisAgent",
+                    trace_store=trace_store,
+                    trace_collector=trace_collector,
+                    config=config,
+                    parent_span_id=parent_span_id,
+                ),
                 grade_documents=grade_documents,
                 rewrite_query=rewrite_query,
                 max_quality_iterations=max_quality_iterations,
             ),
+            trace_store=trace_store,
+            trace_collector=trace_collector,
+            config=config,
         )
 
-    def repair_agent(state: EnterpriseState) -> dict[str, object]:
-        def run() -> dict[str, object]:
+    def repair_agent(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
+        def run(_parent_span_id: str | None) -> dict[str, object]:
             update = run_repair_agent(state, build_repair_plan)
             planning_state = cast(EnterpriseState, {**state, **update})
             actions = plan_actions(planning_state) if plan_actions is not None else []
@@ -201,9 +264,25 @@ def create_enterprise_workflow(
             state["incident_id"],
             "RepairAgent",
             run,
+            trace_store=trace_store,
+            trace_collector=trace_collector,
+            config=config,
         )
 
-    def risk_check(state: EnterpriseState) -> dict[str, object]:
+    def risk_check(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
+        return _trace_call(
+            trace_store,
+            config,
+            state["incident_id"],
+            SpanKind.DECISION,
+            "RiskCheck",
+            lambda _span_id: _risk_check(state),
+            trace_collector=trace_collector,
+        )
+
+    def _risk_check(state: EnterpriseState) -> dict[str, object]:
         decision = evaluate_risk(
             state,
             now=now(),
@@ -224,7 +303,33 @@ def create_enterprise_workflow(
         )
         return {"risk_decision": decision, "enterprise_status": status}
 
-    def approval(state: EnterpriseState) -> dict[str, object]:
+    def approval(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
+        context = _collector_context(config)
+        configurable = config.get("configurable", {})
+        is_resume = isinstance(configurable, dict) and configurable.get("is_resume") == "true"
+        if trace_collector is not None and context is not None and not is_resume:
+            risk = state.get("risk_decision") or {}
+            trace_collector.approval_pause(
+                incident_id=state["incident_id"],
+                agent_name="Approval",
+                node_name="Approval",
+                input_data={"risk_level": risk.get("risk_level")},
+                attempt=1,
+                **context,
+            )
+        return _trace_call(
+            trace_store,
+            config,
+            state["incident_id"],
+            SpanKind.APPROVAL,
+            "Approval",
+            lambda _span_id: _approval(state),
+            trace_collector=trace_collector,
+        )
+
+    def _approval(state: EnterpriseState) -> dict[str, object]:
         risk = state["risk_decision"]
         if risk is None:
             raise ValueError("risk_decision is required for approval")
@@ -271,7 +376,37 @@ def create_enterprise_workflow(
             ),
         }
 
-    def execute(state: EnterpriseState) -> dict[str, object]:
+    def execute(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
+        context = _collector_context(config)
+        if trace_collector is not None and context is not None:
+            actions = state["proposed_actions"]
+            first = actions[0] if actions else {}
+            trace_collector.repair_execute(
+                incident_id=state["incident_id"],
+                agent_name="Execute",
+                node_name="Execute",
+                input_data={
+                    "action_count": len(actions),
+                    "action_id": first.get("action_id"),
+                    "tool_name": first.get("tool_name"),
+                    "target": first.get("target"),
+                },
+                attempt=1,
+                **context,
+            )
+        return _trace_call(
+            trace_store,
+            config,
+            state["incident_id"],
+            SpanKind.EXECUTION,
+            "Execute",
+            lambda _span_id: _execute(state),
+            trace_collector=trace_collector,
+        )
+
+    def _execute(state: EnterpriseState) -> dict[str, object]:
         result = execute_actions(state, action_executor)
         actions = {
             action["action_id"]: action for action in state["proposed_actions"]
@@ -302,17 +437,22 @@ def create_enterprise_workflow(
             "error": error,
         }
 
-    def report_agent(state: EnterpriseState) -> dict[str, object]:
+    def report_agent(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
+        return _agent_call(
+            audit_log,
+            state["incident_id"],
+            "ReportAgent",
+            lambda _span_id: _report_agent(state),
+            trace_store=trace_store,
+            trace_collector=trace_collector,
+            config=config,
+        )
+
+    def _report_agent(state: EnterpriseState) -> dict[str, object]:
         report = _enterprise_report(state)
         update = completion_update(state, "report")
-        _audit(
-            audit_log,
-            incident_id=state["incident_id"],
-            event_type=AuditEventType.AGENT_CALL,
-            actor="ReportAgent",
-            action="run",
-            outcome="succeeded",
-        )
         return {**update, "report": report, "answer": report}
 
     builder = StateGraph(
@@ -429,47 +569,94 @@ def _validate_actions(actions: object) -> None:
 
 
 def _agent_call(
-    audit_log: SQLiteAuditLog | None,
+    audit_log: AuditStore | None,
     incident_id: str,
     actor: str,
-    callback: Callable[[], dict[str, object]],
+    callback: Callable[[str | None], dict[str, object]],
+    *,
+    trace_store: TraceStore | None = None,
+    trace_collector: TraceCollector | None = None,
+    config: RunnableConfig | None = None,
 ) -> dict[str, object]:
-    try:
-        result = callback()
-    except Exception as error:
+    def run(span_id: str | None) -> dict[str, object]:
+        try:
+            result = callback(span_id)
+        except Exception as error:
+            _audit(
+                audit_log,
+                incident_id=incident_id,
+                event_type=AuditEventType.AGENT_CALL,
+                actor=actor,
+                action="run",
+                outcome="failed",
+                details={"error_type": type(error).__name__},
+            )
+            raise
         _audit(
             audit_log,
             incident_id=incident_id,
             event_type=AuditEventType.AGENT_CALL,
             actor=actor,
             action="run",
-            outcome="failed",
-            details={"error_type": type(error).__name__},
+            outcome="succeeded",
         )
-        raise
-    _audit(
-        audit_log,
-        incident_id=incident_id,
-        event_type=AuditEventType.AGENT_CALL,
-        actor=actor,
-        action="run",
-        outcome="succeeded",
+        return result
+
+    return _trace_call(
+        trace_store,
+        config or {},
+        incident_id,
+        SpanKind.AGENT,
+        actor,
+        run,
+        trace_collector=trace_collector,
     )
-    return result
 
 
 def _tool_callback(
     callback: Callable[..., Any] | None,
-    audit_log: SQLiteAuditLog | None,
+    audit_log: AuditStore | None,
     incident_id: str,
     action: str,
+    *,
+    agent_name: str,
+    trace_store: TraceStore | None = None,
+    trace_collector: TraceCollector | None = None,
+    config: RunnableConfig | None = None,
+    parent_span_id: str | None = None,
 ) -> Callable[..., Any] | None:
     if callback is None:
         return None
 
     def wrapped(*args: object) -> object:
+        span = _start_trace_span(
+            trace_store,
+            config or {},
+            incident_id,
+            SpanKind.TOOL,
+            action,
+            parent_span_id=parent_span_id,
+        )
         try:
-            result = callback(*args)
+            if trace_collector is not None and _collector_context(config or {}) is not None:
+                context = _collector_context(config or {})
+                result = trace_collector.record_call(
+                    incident_id=incident_id,
+                    agent_name=agent_name,
+                    node_name=action,
+                    event_type=(
+                        TraceEventType.RAG_RETRIEVAL
+                        if action == "search_knowledge"
+                        else TraceEventType.TOOL_CALL
+                    ),
+                    operation=lambda: callback(*args),
+                    input_data={"argument_count": len(args)},
+                    output_builder=lambda value: _tool_result_summary(action, value),
+                    attempt=span.attempt if span is not None else None,
+                    **context,
+                )
+            else:
+                result = callback(*args)
         except Exception as error:
             _audit(
                 audit_log,
@@ -480,6 +667,7 @@ def _tool_callback(
                 outcome="failed",
                 details={"error_type": type(error).__name__},
             )
+            _finish_trace_span(trace_store, span, SpanStatus.FAILED, error)
             raise
         _audit(
             audit_log,
@@ -489,13 +677,183 @@ def _tool_callback(
             action=action,
             outcome="succeeded",
         )
+        _finish_trace_span(trace_store, span, SpanStatus.SUCCEEDED)
         return result
 
     return wrapped
 
 
+def _trace_call(
+    trace_store: TraceStore | None,
+    config: RunnableConfig,
+    incident_id: str,
+    kind: SpanKind,
+    name: str,
+    callback: Callable[[str | None], dict[str, object]],
+    *,
+    trace_collector: TraceCollector | None = None,
+) -> dict[str, object]:
+    span = _start_trace_span(trace_store, config, incident_id, kind, name)
+    collector_token = None
+    context = _collector_context(config)
+    if (
+        trace_collector is not None
+        and context is not None
+        and kind in {SpanKind.AGENT, SpanKind.DECISION}
+    ):
+        collector_token = trace_collector.agent_enter(
+            incident_id=incident_id,
+            agent_name=name,
+            node_name=name,
+            input_data={"attempt": span.attempt if span is not None else 1},
+            attempt=span.attempt if span is not None else None,
+            **context,
+        )
+    try:
+        result = callback(span.span_id if span is not None else None)
+    except BaseException as error:
+        status = (
+            SpanStatus.INTERRUPTED
+            if type(error).__name__ in {"GraphInterrupt", "GraphBubbleUp"}
+            else SpanStatus.FAILED
+        )
+        _finish_trace_span(trace_store, span, status, error)
+        if collector_token is not None:
+            trace_collector.agent_exit(
+                collector_token,
+                status=(
+                    TraceEventStatus.INTERRUPTED
+                    if status == SpanStatus.INTERRUPTED
+                    else TraceEventStatus.FAILED
+                ),
+                output_data={"error_type": type(error).__name__},
+            )
+        raise
+    _finish_trace_span(trace_store, span, SpanStatus.SUCCEEDED, attributes=_result_summary(result))
+    if collector_token is not None:
+        trace_collector.agent_exit(
+            collector_token,
+            status=TraceEventStatus.SUCCEEDED,
+            output_data=_result_summary(result),
+        )
+    return result
+
+
+def _start_trace_span(
+    trace_store: TraceStore | None,
+    config: RunnableConfig,
+    incident_id: str,
+    kind: SpanKind,
+    name: str,
+    *,
+    parent_span_id: str | None = None,
+):
+    if trace_store is None:
+        return None
+    configurable = config.get("configurable", {})
+    if not isinstance(configurable, dict):
+        return None
+    trace_id = configurable.get("trace_id")
+    run_id = configurable.get("run_id")
+    parent = parent_span_id or configurable.get("workflow_span_id")
+    if not all(isinstance(item, str) and item for item in (trace_id, run_id)):
+        return None
+    return trace_store.start_span(
+        trace_id=trace_id,
+        run_id=run_id,
+        incident_id=incident_id,
+        parent_span_id=parent if isinstance(parent, str) else None,
+        kind=kind,
+        name=name,
+        input_summary_hash=_summary_digest(
+            {"incident_id": incident_id, "kind": kind.value, "name": name}
+        ),
+    )
+
+
+def _finish_trace_span(
+    trace_store: TraceStore | None,
+    span: object,
+    status: SpanStatus,
+    error: BaseException | None = None,
+    *,
+    attributes: dict[str, object] | None = None,
+) -> None:
+    if trace_store is None or span is None:
+        return
+    trace_store.finish_span(
+        span.span_id,
+        status=status,
+        error_code=type(error).__name__ if error is not None else None,
+        attributes=attributes,
+        output_summary_hash=_summary_digest(
+            {
+                "status": status.value,
+                "error_code": type(error).__name__ if error is not None else None,
+                "attributes": attributes or {},
+            }
+        ),
+    )
+
+
+def _summary_digest(summary: dict[str, object]) -> str:
+    payload = json.dumps(summary, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _collector_context(config: RunnableConfig) -> dict[str, str] | None:
+    configurable = config.get("configurable", {})
+    if not isinstance(configurable, dict):
+        return None
+    trace_id = configurable.get("trace_id")
+    run_id = configurable.get("run_id")
+    if not all(isinstance(item, str) and item for item in (trace_id, run_id)):
+        return None
+    return {"trace_id": trace_id, "run_id": run_id}
+
+
+def _tool_result_summary(action: str, result: object) -> dict[str, object]:
+    if action == "search_knowledge":
+        return {"document_count": len(result) if isinstance(result, list) else 0}
+    summary: dict[str, object] = {}
+    if isinstance(result, dict):
+        status = result.get("status")
+        if isinstance(status, str):
+            summary["status"] = status
+        for field in ("records", "interfaces", "alarms", "items"):
+            items = result.get(field)
+            if isinstance(items, list):
+                summary["result_count"] = len(items)
+                break
+    return summary
+
+
+def _result_summary(result: dict[str, object]) -> dict[str, object]:
+    keys = ("enterprise_status", "relevance_score", "diagnosis_iteration")
+    summary = {
+        key: result[key]
+        for key in keys
+        if key in result and isinstance(result[key], (str, int, float, bool, type(None)))
+    }
+    risk = result.get("risk_decision")
+    if isinstance(risk, dict) and isinstance(risk.get("risk_level"), str):
+        summary["risk_level"] = risk["risk_level"]
+    approval = result.get("approval_result")
+    if isinstance(approval, dict) and isinstance(approval.get("decision"), str):
+        summary["approval_decision"] = approval["decision"]
+    execution = result.get("execution_result")
+    if isinstance(execution, dict) and isinstance(execution.get("status"), str):
+        summary["execution_status"] = execution["status"]
+    diagnosis = result.get("diagnosis_result")
+    if isinstance(diagnosis, dict) and isinstance(diagnosis.get("evidence_refs"), list):
+        summary["evidence_count"] = len(diagnosis["evidence_refs"])
+    if result.get("error"):
+        summary["has_error"] = True
+    return summary
+
+
 def _audit(
-    audit_log: SQLiteAuditLog | None,
+    audit_log: AuditStore | None,
     *,
     incident_id: str,
     event_type: AuditEventType,

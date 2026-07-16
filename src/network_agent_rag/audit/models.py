@@ -12,6 +12,7 @@ class AuditEventType(StrEnum):
     TOOL_CALL = "tool_call"
     DECISION = "decision"
     APPROVAL = "approval"
+    TRACE = "trace"
 
 
 class AuditEvent(BaseModel):

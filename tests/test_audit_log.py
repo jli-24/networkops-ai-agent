@@ -22,7 +22,19 @@ class AuditLogTests(unittest.TestCase):
                 outcome="succeeded",
                 details={
                     "api_key": "secret",
-                    "nested": {"password": "hidden", "evidence": "LOG-1"},
+                    "nested": {
+                        "password": "hidden",
+                        "private_key": "private material",
+                        "system_prompt": "full prompt",
+                        "document_body": "full document",
+                        "traceback": "full stack",
+                        "evidence": "LOG-1",
+                        "document_count": 3,
+                        "prompt_sha256": "a" * 64,
+                        "tuple_payload": (
+                            {"authorization": "Bearer secret", "status": "ok"},
+                        ),
+                    },
                 },
             )
             audit.record(
@@ -56,7 +68,23 @@ class AuditLogTests(unittest.TestCase):
             self.assertEqual(
                 first.details["nested"]["password"], "***REDACTED***"
             )
+            for key in (
+                "private_key",
+                "system_prompt",
+                "document_body",
+                "traceback",
+            ):
+                with self.subTest(key=key):
+                    self.assertEqual(
+                        first.details["nested"][key], "***REDACTED***"
+                    )
             self.assertEqual(first.details["nested"]["evidence"], "LOG-1")
+            self.assertEqual(first.details["nested"]["document_count"], 3)
+            self.assertEqual(first.details["nested"]["prompt_sha256"], "a" * 64)
+            self.assertEqual(
+                first.details["nested"]["tuple_payload"],
+                [{"authorization": "***REDACTED***", "status": "ok"}],
+            )
             self.assertIsNotNone(first.created_at.tzinfo)
 
     def test_idempotency_key_prevents_duplicate_approval_event(self) -> None:

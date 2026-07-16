@@ -26,6 +26,7 @@ htmlcov/
 # Local vector data
 data/chroma/
 data/enterprise/
+data/evaluations/
 # Internal development records
 docs/superpowers/
 # Logs
