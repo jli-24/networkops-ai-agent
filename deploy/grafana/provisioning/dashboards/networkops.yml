@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: NetworkOps
+    orgId: 1
+    folder: NetworkOps
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards

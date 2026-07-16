@@ -14,8 +14,8 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.6.0-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-256%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.7.0-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Test-272%20passed-success?style=flat-square">
 
 </p>
 
@@ -106,9 +106,9 @@ v0.5.0-alpha 在不移除 SQLite 的前提下增加可插拔存储：
 - PostgreSQL Audit 与 Trace 实现，分别使用独立表；
 - LangGraph Checkpoint 可独立选择 SQLite、PostgreSQL 或 Redis；
 - `create_storage_enterprise_app()` 按显式配置装配三类存储域；
-- 本地 Docker Compose 只启动 PostgreSQL 17 与 Redis 8 数据服务。
+- v0.7.0 生产部署 Compose 在该存储基础上增加 API、Nginx、Prometheus 与 Grafana。
 
-Checkpoint、Trace 与 Audit 始终职责分离，不共用业务表。Redis 本阶段仅用于 Checkpointer，不提供 Session Cache、Agent Memory、Queue 或 Pub/Sub。该版本面向新部署，不迁移既有 SQLite 数据；默认后端仍是 SQLite，且 PostgreSQL/Redis 连接失败时不会静默回退。`Storage Health API` 计划在 v0.5.1 提供。
+Checkpoint、Trace 与 Audit 始终职责分离，不共用业务表。Redis 本阶段仅用于 Checkpointer，不提供 Session Cache、Agent Memory、Queue 或 Pub/Sub。该版本面向新部署，不迁移既有 SQLite 数据；开发默认后端仍是 SQLite，生产部署适配器强制 PostgreSQL/Redis，连接失败时不会静默回退。
 
 
 ### 🔐 Authentication + RBAC
@@ -121,6 +121,19 @@ v0.5.1 提供严格的 `User`、`Role`、`Permission` 与运行时 RBAC；v0.6.0
 - 配置 `JWT_SECRET_KEY` 后 Enterprise 写操作启用认证，未配置时保留旧版本地兼容模式。
 
 当前不提供登录接口、密码存储、Refresh Token、撤销列表、OAuth2、LDAP、SSO 或用户数据库。JWT 认证也不替代 TLS、限流与严格 CORS；审批请求中的自由文本 `actor` 字段仍不是受认证身份来源。
+
+
+### 🚢 Production Deployment Layer
+
+v0.7.0 新增独立部署适配器，不改造兼容入口 `main.py`，也不把演示 Agent 当成生产工作流：
+
+- `deployment.app:create_app` 从受信任的 `module:function` 加载外部 Workflow Factory；
+- Production 模式强制 PostgreSQL Audit/Trace、Redis Checkpoint、JWT 密钥和显式连接配置；
+- `GET /health` 仅返回 service/database/redis 就绪状态，旧 `/api/v1/health` 契约保持不变；
+- 非 root Python 3.11 镜像、Nginx SSE 网关、Prometheus 抓取和预配置 Grafana Dashboard；
+- 部署专用中间件组合 Agent、HTTP 和授权决策的低基数 Prometheus 指标。
+
+Compose 是单机参考部署，所有密码必须通过本地 `.env` 显式提供。当前不包含 TLS 证书管理、托管 Secret、备份、高可用、Kubernetes、Helm、Service Mesh 或自动扩缩容；生产环境仍需由平台侧补齐这些能力。详见 [deployment/README.md](deployment/README.md)。
 
 
 ### 🧪 Engineering Quality
@@ -285,7 +298,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-Ran 215 tests (214 passed, 1 optional PostgreSQL integration test skipped)
+272 passed, 1 optional PostgreSQL integration test skipped
 
 OK
 ```
@@ -374,7 +387,27 @@ Completed:
 - Local-development PostgreSQL and Redis Docker Compose
 
 
-### v0.6.0 🚧 Network Digital Twin Evolution
+### v0.6.0 ✅ Authentication Layer
+
+Completed:
+
+- Optional HS256 JWT identity validation
+- JWT identity to UserContext and RBAC integration
+- Authentication audit events and legacy compatibility
+
+
+### v0.7.0 ✅ Production Deployment Layer
+
+Completed:
+
+- Non-root Python 3.11 application image
+- Nginx, FastAPI, PostgreSQL, Redis, Prometheus and Grafana Compose stack
+- Fail-closed production configuration and dependency readiness
+- Deployment-only HTTP and authorization metrics
+- CI container build gate without image publishing
+
+
+### Future 🚧 Network Digital Twin Evolution
 
 Planning:
 
@@ -477,7 +510,7 @@ NetworkOps AI Agent 面向企业和校园网络运维场景，将知识检索、
 审计与文本报告
 ```
 
-Enterprise Workflow 与旧工作流并存；v0.4 可观测性覆盖本地 Enterprise incident，但真实网络动作、身份认证和自动回退仍未实现，见 [Detailed Roadmap](#11-detailed-roadmap)。
+Enterprise Workflow 与旧工作流并存；当前已有可选 JWT 身份、RBAC 与治理观测，但真实网络动作、自动验证和自动回退仍未实现，见 [Detailed Roadmap](#11-detailed-roadmap)。
 
 ## 2. 项目背景
 
@@ -574,7 +607,7 @@ v0.6.0 可使用 JWT 身份和 RBAC 控制计划、审批与执行权限，但�
 - 标准库 `unittest` 全量回归；
 - `compileall` 与 `pip check` 验证。
 
-仓库提供仅含 PostgreSQL/Redis 数据服务的本地开发 Compose，但尚无应用 Dockerfile；基础 GitHub Actions CI 已启用。
+仓库提供非 root 应用 Dockerfile，以及包含 Nginx、PostgreSQL、Redis、Prometheus 和 Grafana 的单机 Compose；GitHub Actions 会构建镜像但不会发布或部署。
 
 ## 4. 系统架构
 
@@ -646,7 +679,7 @@ flowchart TB
 | 故障注入 | 🧭 Planned | 设备离线、端口关闭、拥塞和组合故障注入 |
 | 真实网络自动修复 | 🧭 Planned | 认证、厂商适配、自动验证和经过测试的回退 |
 | Incident Report 文件导出 | 🧭 Planned | 结构化事件报告与 PDF/Markdown 导出 |
-| Docker Compose | 🧪 Alpha | 仅提供本地 PostgreSQL 与 Redis 数据服务，不包含应用容器 |
+| Production Deployment | ✅ Current | 非 root 应用镜像、Nginx SSE、PostgreSQL、Redis、Prometheus、Grafana 与依赖就绪探测 |
 
 ## 6. 支持故障类型
 
@@ -713,7 +746,7 @@ QueryAnalyzer
 | Frontend | Streamlit、标准库 `urllib` SSE 客户端 |
 | Testing | `unittest`、pytest（可选开发依赖）、确定性 Embeddings test double、`compileall`、`pip check` |
 | Persistence | Chroma 集合重建；Checkpoint 支持 SQLite/PostgreSQL/Redis；Audit/Trace 支持 SQLite/PostgreSQL；聊天历史仍为进程内存 |
-| Deployment | 本地 Python 进程；Compose 仅提供本地 PostgreSQL/Redis，不包含应用容器 |
+| Deployment | 非 root Python 3.11 应用镜像；Nginx、PostgreSQL、Redis、Prometheus、Grafana 单机 Compose |
 
 项目不使用 SQLAlchemy 或 Alembic；PostgreSQL 适配直接使用 psycopg 3 参数化 SQL，pytest 作为可选开发依赖，仓库已有基础 GitHub Actions CI。
 
@@ -824,11 +857,11 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 - 标准库 `unittest` 回归测试；
 - 中文技术文档与可复现演示。
 
-仓库已配置 GitHub Actions CI；容器发布、静态检查和生产部署流水线仍属于后续规划。
+仓库已配置 GitHub Actions CI，并验证 Python 测试、依赖、编译和 Docker 镜像构建；CI 不自动推送镜像或发布生产环境。
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入本地 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储适配。完整 Digital Twin、生产身份体系和真实设备执行仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 增加可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
@@ -854,7 +887,7 @@ Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分�
 - 基于边缘网关可达性的只读传播范围分析；
 - 设备、链路和服务影响评分。
 
-v0.6.0 规划：
+后续规划：
 
 - 可控故障注入；
 - 故障恢复、传播时间线和多故障组合；
@@ -881,16 +914,16 @@ v0.6.0 规划：
 - JSONL Benchmark、确定性评分、离线 CLI 和结果查询 API；
 - Streamlit Enterprise incident、审批、Trace、Timeline、Metrics 和 Benchmark 标签页。
 
-限制：本地 SQLite Trace Store 不适合高并发；当前没有 OpenTelemetry/OTLP、集中式指标后端、认证或长期保留策略。
+限制：本地 SQLite Trace Store 不适合高并发；当前没有 OpenTelemetry/OTLP、长期保留策略或跨实例 Trace 聚合。v0.6.0 已提供可选 JWT 认证。
 
 ### Phase 5 — Production Storage（Alpha in v0.5.0）
 
 - Audit/Trace 通过 Protocol 支持 SQLite 与 PostgreSQL；
 - Checkpoint 独立支持 SQLite、PostgreSQL 与 Redis；
 - 三类存储职责分离，不共用表；
-- PostgreSQL/Redis Compose 仅服务本地开发。
+- PostgreSQL/Redis 可由 v0.7.0 Compose 与应用、网关和观测组件一起部署。
 
-限制：不包含 SQLite 数据迁移、自动故障转移、跨后端复制或 Storage Health API；后者计划在 v0.5.1，迁移工具计划在 v0.6/v1.0。
+限制：不包含 SQLite 数据迁移、自动故障转移或跨后端复制；`/health` 是依赖就绪探测，不是存储管理 API。
 
 ### Phase 6 — Network Digital Twin Evolution（Planned）
 
@@ -899,13 +932,14 @@ v0.6.0 规划：
 - 修复前影响评估与修复后回归验证；
 - 配置变更沙箱。
 
-### Phase 7 — Open Source Release（Planned）
+### Phase 7 — Production Deployment（Completed in v0.7.0）
 
-- 应用 Dockerfile 与完整部署 Compose；
-- 发布自动化、代码格式与静态检查；
-- 安全策略、贡献指南与 Issue 模板；
-- Chroma 增量索引与集合生命周期管理；
-- 可选 OpenTelemetry、真实 Prometheus/Zabbix/ELK/LLM 适配器。
+- 非 root 应用 Dockerfile 与单机完整部署 Compose；
+- Nginx SSE 网关、Prometheus 抓取和 Grafana 自动配置；
+- 生产配置 fail-closed、PostgreSQL/Redis 就绪探测；
+- CI Docker build 门禁，不自动发布镜像。
+
+限制：TLS、Secret 管理、备份、高可用、Kubernetes、Helm、Service Mesh、自动扩缩容、OpenTelemetry 和真实 Prometheus/Zabbix/ELK/LLM 适配器仍为后续规划。
 
 ## 12. Quick Start
 
@@ -1087,25 +1121,27 @@ python -m pip check
 
 测试使用确定性 Embeddings test double（包含轻量 FakeEmbeddings 实现），不下载 BGE-M3，也不会访问真实网络设备。
 
-### 12.11 本地 PostgreSQL 与 Redis
+### 12.11 单机生产参考部署
 
-根目录 `docker-compose.yml` 仅提供 PostgreSQL 17 与 Redis 8 数据服务，不包含后端或前端应用容器。复制 `.env.example` 为本地 `.env` 并修改开发密码后运行：
+根目录 `docker-compose.yml` 提供 Nginx、FastAPI、PostgreSQL、Redis、Prometheus 与 Grafana。复制 `.env.example` 为本地 `.env`，显式填写所有密码、JWT 密钥和受信任的 Workflow Factory 后运行：
 
 ```bash
-docker compose up -d postgres redis
+docker compose config
+docker compose up --build -d
 docker compose ps
 ```
 
-随后选择所需后端，例如：
+关键生产设置示例：
 
 ```env
+APP_ENV=production
 STORAGE_BACKEND=postgres
 CHECKPOINT_BACKEND=redis
-DATABASE_URL=postgresql://networkops:changed-password@127.0.0.1:5432/networkops
-REDIS_URL=redis://:changed-password@127.0.0.1:6379/0
+NETWORKOPS_WORKFLOW_FACTORY=your_package.factory:create_workflow
+PROMETHEUS_ENABLED=true
 ```
 
-Compose 中的默认口令仅用于本机开发，不能用于共享或生产环境。Redis 8 用作 LangGraph Checkpointer 时需要 RedisJSON 与 RediSearch；本阶段不将 Redis 用作缓存、Memory 或队列。
+Compose 不提供默认密码，未填写必需变量时配置解析会失败。默认网关仅绑定 `127.0.0.1:8080`，Grafana 绑定 `127.0.0.1:3000`；Nginx 不对外暴露 `/metrics`。Redis 仅用作 LangGraph Checkpointer，不用作缓存、Memory 或队列。详见 [deployment/README.md](deployment/README.md)。
 
 ## 13. License
 

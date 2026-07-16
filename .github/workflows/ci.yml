@@ -43,10 +43,14 @@ jobs:
 
       - name: Compile
         run: |
-          python -m compileall src tests
+          python -m compileall src tests deployment
 
 
       - name: Run tests
         run: |
           python -m coverage run --branch --source=network_agent_rag -m unittest discover -s tests -v
           python -m coverage report --fail-under=85
+
+      - name: Build production container
+        run: |
+          docker build -t networkops-ai-agent:ci .
