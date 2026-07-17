@@ -2,7 +2,7 @@
 
 ## System Overview
 
-NetworkOps AI Agent v0.9.0 keeps three compatible orchestration generations:
+NetworkOps AI Agent v0.10.0 keeps three compatible orchestration generations:
 
 - v0.1.0 keeps the general quality-control workflow and the dedicated single-agent diagnosis workflow;
 - v0.2.0 adds a supervisor-led multi-agent workflow without replacing the v0.1 entry points.
@@ -13,6 +13,7 @@ NetworkOps AI Agent v0.9.0 keeps three compatible orchestration generations:
 - v0.7.0 adds an explicit production deployment adapter and single-host container stack.
 - v0.8.0 formalizes the existing Enterprise Security Layer without adding a second authorization path.
 - v0.9.0 formalizes the existing HS256 JWT Authentication Layer as the trusted identity source for RBAC.
+- v0.10.0 adds an auth-owned identity lifecycle without changing workflow state or API contracts.
 
 All workflows are dependency injected. The default FastAPI application does not create a model, vector store, or workflow automatically.
 
@@ -96,7 +97,7 @@ Storage is split into three independent domains:
  SQLite/Postgres/Redis  SQLite/Postgres     SQLite/Postgres
 ```
 
-`AuditStore` and `TraceStore` are structural protocols. The existing `SQLiteAuditLog` and `SQLiteTraceStore` remain unchanged and satisfy those protocols directly. PostgreSQL uses separate `networkops_audit_events` and `networkops_trace_spans` tables; the official LangGraph PostgreSQL Checkpointer owns its own checkpoint tables. Redis is supported only as a LangGraph Checkpointer and is not used for Agent Memory, caching, queues, Pub/Sub, Trace, or Audit.
+`AuditStore` and `TraceStore` are structural protocols. The existing `SQLiteAuditLog` and `SQLiteTraceStore` remain unchanged and satisfy those protocols directly. PostgreSQL uses separate `networkops_audit_events` and `networkops_trace_spans` tables; the official LangGraph PostgreSQL Checkpointer owns its own checkpoint tables. `REDIS_URL` remains Checkpoint-only. v0.10 uses a separate `IDENTITY_REDIS_URL` and auth-owned namespace; neither Redis domain is used for Agent Memory, queues, Trace, or Audit.
 
 Audit and Trace retain synchronous interfaces for v0.4 compatibility. FastAPI's asynchronous incident and SSE paths offload these calls to worker threads; synchronous observability routes are already executed in FastAPI's thread pool. PostgreSQL serializes per-node attempt allocation with a transaction-scoped advisory lock and completes spans under a row lock.
 
@@ -113,13 +114,14 @@ The production ASGI entry point is `deployment.app:create_app`. It loads a
 trusted `module:function` workflow factory, then delegates storage and
 checkpoint lifecycle management to `create_storage_enterprise_app()`. Production
 validation requires PostgreSQL for Audit/Trace, Redis for Checkpoint, JWT
-configuration, and both connection URLs. Missing configuration stops startup;
+configuration, and a separate Identity Redis URL. Missing configuration stops startup;
 there is no SQLite fallback.
 
 ```text
 Client -> Nginx -> FastAPI
                      |-- PostgreSQL: Audit and Trace
                      |-- Redis: LangGraph Checkpoint
+                     |-- Identity Redis: Session and credential lifecycle
 Prometheus <- /metrics
 Grafana    <- Prometheus
 ```
@@ -190,9 +192,34 @@ bytes and never supplies a default. Authentication and legacy context providers
 are mutually exclusive. Identity objects remain outside Workflow State,
 Checkpoint, API schemas, and SSE payloads.
 
-The project does not implement OAuth2, OIDC, JWKS, LDAP, Active Directory, SSO,
-MFA, refresh tokens, token revocation, or a user database. The approval payload
-`actor` remains a business label and is not bound to the JWT subject.
+The v0.9 layer did not include refresh or revocation. The project still does not
+implement OAuth2, OIDC, JWKS, LDAP, Active Directory, SSO, MFA, or a user
+database. The approval payload `actor` remains a business label and is not
+bound to the JWT subject.
+
+## v0.10.0 Enterprise Identity Enhancement
+
+The Authentication Layer now owns an independent `IdentityStore`. Development
+and tests can use the in-memory implementation; production uses an auth-owned
+Redis namespace configured through `IDENTITY_REDIS_URL`. It does not implement
+the project Storage Protocol and cannot write Workflow State, Checkpoint,
+Trace, or API payloads.
+
+Session-bound access tokens default to 15 minutes. Refresh tokens default to
+seven days, rotate atomically in Identity Redis, and revoke the entire session
+when an already-rotated token is reused. The v0.9 `create_token()` and
+`verify_token()` contract remains available for legacy tokens until their own
+expiration.
+
+API keys bind an immutable existing `UserIdentity`; they do not define a second
+identity, role, permission, or scope model. Successful API-key authentication
+continues through `UserContext`, the existing RBAC permission checks, and
+RunnableConfig. Revoking a key changes only credential authentication state.
+
+Audit records only non-secret references such as `session_id` and `key_id`.
+Tokens, API keys, credential hashes, secret hashes, and fingerprints are not
+projected into Audit, Trace, Metrics, Governance, State, Checkpoint, SSE, or API
+responses. No identity-management HTTP routes are added in this release.
 
 ## Existing v0.1.0 Workflows
 
@@ -210,4 +237,4 @@ MFA, refresh tokens, token revocation, or a user database. The approval payload
 
 ## Safety
 
-The repository does not provide real device connectors or built-in change handlers. The v0.3 enterprise graph has interrupt/checkpoint approval and an allowlisted executor contract, but default execution is blocked. The HS256 JWT layer introduced in v0.6.0 and formalized in v0.9.0 can authenticate Enterprise API callers before existing RBAC checks; it does not provide login, token refresh/revocation, TLS, rate limiting, or a user database. The deployment adapter must remain behind a trusted gateway and platform security controls.
+The repository does not provide real device connectors or built-in change handlers. The v0.3 enterprise graph has interrupt/checkpoint approval and an allowlisted executor contract, but default execution is blocked. The Authentication Layer can validate legacy or session-bound JWTs and API keys before existing RBAC checks; it does not provide login, identity-management HTTP APIs, OAuth/OIDC, TLS, rate limiting, or a user database. The deployment adapter must remain behind a trusted gateway and platform security controls.

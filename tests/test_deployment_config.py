@@ -35,9 +35,9 @@ class DeploymentSettingsTests(unittest.TestCase):
         project = tomllib.loads(
             (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         )
-        self.assertEqual(project["project"]["version"], "0.9.0")
-        self.assertEqual(network_agent_rag.__version__, "0.9.0")
-        self.assertEqual(importlib.metadata.version("networkops-ai-agent"), "0.9.0")
+        self.assertEqual(project["project"]["version"], "0.10.0")
+        self.assertEqual(network_agent_rag.__version__, "0.10.0")
+        self.assertEqual(importlib.metadata.version("networkops-ai-agent"), "0.10.0")
 
     def test_app_env_is_primary_and_environment_remains_compatible(self) -> None:
         with patch.dict(
@@ -72,6 +72,7 @@ class DeploymentFactoryTests(unittest.TestCase):
             "checkpoint_backend": "redis",
             "database_url": "postgresql://user:secret@postgres/networkops",
             "redis_url": "redis://:secret@redis/0",
+            "identity_redis_url": "redis://:secret@redis/1",
             "jwt_secret_key": "x" * 32,
             "networkops_workflow_factory": "example.factory:create_workflow",
             "prometheus_enabled": True,
@@ -85,6 +86,8 @@ class DeploymentFactoryTests(unittest.TestCase):
             {"checkpoint_backend": "sqlite"},
             {"database_url": None},
             {"redis_url": None},
+            {"identity_redis_url": None},
+            {"identity_redis_url": "redis://:secret@redis/0"},
             {"jwt_secret_key": None},
             {"networkops_workflow_factory": None},
         )
@@ -144,13 +147,17 @@ class DeploymentFactoryTests(unittest.TestCase):
         ):
             result = self.module.create_app(settings=settings)
         self.assertIs(result, application)
-        storage_factory.assert_called_once_with(
-            observed_workflow_factory=workflow_factory,
-            storage_backend="postgres",
-            checkpoint_backend="redis",
-            database_url=settings.database_url,
-            redis_url=settings.redis_url,
-        )
+        storage_factory.assert_called_once()
+        arguments = storage_factory.call_args.kwargs
+        self.assertIs(arguments["observed_workflow_factory"], workflow_factory)
+        self.assertEqual(arguments["storage_backend"], "postgres")
+        self.assertEqual(arguments["checkpoint_backend"], "redis")
+        self.assertEqual(arguments["database_url"], settings.database_url)
+        self.assertEqual(arguments["redis_url"], settings.redis_url)
+        self.assertEqual(arguments["identity_redis_url"], settings.identity_redis_url)
+        manager = arguments["identity_token_manager"]
+        self.assertEqual(manager.access_expire_minutes, 15)
+        self.assertEqual(manager.refresh_expire_days, 7)
 
 
 class DeploymentHealthTests(unittest.TestCase):
@@ -166,6 +173,7 @@ class DeploymentHealthTests(unittest.TestCase):
             checkpoint_backend="redis",
             database_url="postgresql://redacted",
             redis_url="redis://redacted",
+            identity_redis_url="redis://identity-redacted/1",
             jwt_secret_key="x" * 32,
             networkops_workflow_factory="site.factory:build",
         )
@@ -293,7 +301,7 @@ class DeploymentFilesTests(unittest.TestCase):
         self.assertIn("python:3.11", dockerfile)
         self.assertIn("USER networkops", dockerfile)
         self.assertIn("HEALTHCHECK", dockerfile)
-        self.assertIn("networkops_ai_agent-0.9.0-py3-none-any.whl", dockerfile)
+        self.assertIn("networkops_ai_agent-0.10.0-py3-none-any.whl", dockerfile)
         self.assertNotIn("--reload", dockerfile)
         for service in (
             "nginx:",

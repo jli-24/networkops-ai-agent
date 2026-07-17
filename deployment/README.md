@@ -13,7 +13,10 @@ STORAGE_BACKEND=postgres
 CHECKPOINT_BACKEND=redis
 DATABASE_URL=postgresql://...
 REDIS_URL=redis://...
+IDENTITY_REDIS_URL=redis://.../1
 JWT_SECRET_KEY=<at least 32 random bytes>
+JWT_ACCESS_EXPIRE_MINUTES=15
+JWT_REFRESH_EXPIRE_DAYS=7
 NETWORKOPS_WORKFLOW_FACTORY=your_package.factory:create_workflow
 PROMETHEUS_ENABLED=true
 ```
@@ -21,6 +24,10 @@ PROMETHEUS_ENABLED=true
 The production adapter fails during startup if any required setting is missing.
 It never falls back to SQLite. Connection strings and secrets are not included
 in configuration error messages.
+
+`REDIS_URL` is reserved for the LangGraph Checkpointer. `IDENTITY_REDIS_URL`
+must identify a separate Redis database or instance and is owned only by the
+Authentication Layer for sessions, refresh rotation, and API-key credentials.
 
 ## Local Compose stack
 

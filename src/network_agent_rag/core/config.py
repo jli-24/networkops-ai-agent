@@ -23,9 +23,12 @@ class Settings(BaseSettings):
     checkpoint_backend: Literal["sqlite", "postgres", "redis"] = "sqlite"
     database_url: str | None = None
     redis_url: str | None = None
+    identity_redis_url: str | None = None
     jwt_secret_key: SecretStr | None = None
     jwt_algorithm: Literal["HS256"] = "HS256"
     jwt_expire_minutes: int = Field(default=30, gt=0)
+    jwt_access_expire_minutes: int = Field(default=15, gt=0)
+    jwt_refresh_expire_days: int = Field(default=7, gt=0)
     prometheus_enabled: bool = False
     networkops_workflow_factory: str | None = None
     approval_ttl_seconds: int = 1800

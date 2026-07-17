@@ -49,6 +49,7 @@ from network_agent_rag.auth import (
     JWTTokenManager,
     Permission,
     UserContext,
+    open_redis_identity_authentication,
 )
 from network_agent_rag.auth.dependencies import (
     current_user_dependency,
@@ -235,6 +236,8 @@ def create_storage_enterprise_app(
     checkpoint_backend: str | None = None,
     database_url: str | None = None,
     redis_url: str | None = None,
+    identity_redis_url: str | None = None,
+    identity_token_manager: JWTTokenManager | None = None,
     checkpoint_path: str | Path | None = None,
     audit_path: str | Path | None = None,
     observability_path: str | Path | None = None,
@@ -250,10 +253,31 @@ def create_storage_enterprise_app(
             "configure exactly one of workflow_factory or observed_workflow_factory"
         )
     settings = Settings()
-    resolved_authentication = _resolve_authentication_provider(
-        settings,
-        authentication_provider,
-        user_context_provider,
+    identity_redis = (
+        identity_redis_url
+        if identity_redis_url is not None
+        else settings.identity_redis_url
+    )
+    if identity_redis and (
+        authentication_provider is not None or user_context_provider is not None
+    ):
+        raise ValueError(
+            "identity authentication cannot be combined with an explicit provider"
+        )
+    if (
+        identity_redis
+        and identity_token_manager is None
+        and settings.jwt_secret_key is None
+    ):
+        raise ValueError("JWT_SECRET_KEY is required for identity authentication")
+    resolved_authentication = (
+        None
+        if identity_redis
+        else _resolve_authentication_provider(
+            settings,
+            authentication_provider,
+            user_context_provider,
+        )
     )
     storage_name = storage_backend or settings.storage_backend
     checkpoint_name = checkpoint_backend or settings.checkpoint_backend
@@ -287,33 +311,41 @@ def create_storage_enterprise_app(
             trace_path=observability,
             database_url=database,
         ) as (audit_log, trace_store):
-            trace_collector = TraceCollector(audit_log)
-            metrics_store = SQLiteMetricsStore(trace_store, audit_log)
-            benchmark_store = BenchmarkResultStore(benchmark_results)
-            async with _checkpoint_context(
-                checkpoint_name,
-                sqlite_path=checkpoint,
-                database_url=database,
-                redis_url=redis,
-            ) as saver:
-                if observed_workflow_factory is not None:
-                    workflow = observed_workflow_factory(
-                        saver,
-                        audit_log=audit_log,
-                        trace_store=trace_store,
-                        metrics_store=metrics_store,
-                        trace_collector=trace_collector,
-                    )
-                else:
-                    assert workflow_factory is not None
-                    workflow = workflow_factory(saver, audit_log)
-                application.state.enterprise_workflow = workflow
-                application.state.audit_log = audit_log
-                application.state.trace_store = trace_store
-                application.state.trace_collector = trace_collector
-                application.state.metrics_store = metrics_store
-                application.state.benchmark_store = benchmark_store
-                yield
+            with _identity_authentication_context(
+                identity_redis,
+                settings=settings,
+                audit_log=audit_log,
+                fallback=resolved_authentication,
+                token_manager=identity_token_manager,
+            ) as active_authentication:
+                trace_collector = TraceCollector(audit_log)
+                metrics_store = SQLiteMetricsStore(trace_store, audit_log)
+                benchmark_store = BenchmarkResultStore(benchmark_results)
+                async with _checkpoint_context(
+                    checkpoint_name,
+                    sqlite_path=checkpoint,
+                    database_url=database,
+                    redis_url=redis,
+                ) as saver:
+                    if observed_workflow_factory is not None:
+                        workflow = observed_workflow_factory(
+                            saver,
+                            audit_log=audit_log,
+                            trace_store=trace_store,
+                            metrics_store=metrics_store,
+                            trace_collector=trace_collector,
+                        )
+                    else:
+                        assert workflow_factory is not None
+                        workflow = workflow_factory(saver, audit_log)
+                    application.state.enterprise_workflow = workflow
+                    application.state.audit_log = audit_log
+                    application.state.trace_store = trace_store
+                    application.state.trace_collector = trace_collector
+                    application.state.metrics_store = metrics_store
+                    application.state.benchmark_store = benchmark_store
+                    application.state.authentication_provider = active_authentication
+                    yield
 
     return create_enterprise_app(
         clock=clock,
@@ -833,6 +865,38 @@ def _resolve_authentication_provider(
             expire_minutes=settings.jwt_expire_minutes,
         )
     )
+
+
+@contextmanager
+def _identity_authentication_context(
+    identity_redis_url: str | None,
+    *,
+    settings: Settings,
+    audit_log: AuditStore,
+    fallback: AuthenticationProvider | None,
+    token_manager: JWTTokenManager | None,
+) -> Iterator[AuthenticationProvider | None]:
+    if not identity_redis_url:
+        yield fallback
+        return
+    if token_manager is None:
+        assert settings.jwt_secret_key is not None
+        token_manager = JWTTokenManager(
+            settings.jwt_secret_key.get_secret_value(),
+            algorithm=settings.jwt_algorithm,
+            expire_minutes=settings.jwt_expire_minutes,
+            access_expire_minutes=settings.jwt_access_expire_minutes,
+            refresh_expire_days=settings.jwt_refresh_expire_days,
+        )
+    try:
+        with open_redis_identity_authentication(
+            identity_redis_url,
+            token_manager,
+            audit_log=audit_log,
+        ) as provider:
+            yield provider
+    except Exception:
+        raise RuntimeError("Identity Redis initialization failed") from None
 
 
 def _sse(event: str, data: dict[str, object]) -> str:

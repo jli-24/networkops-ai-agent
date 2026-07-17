@@ -14,8 +14,8 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.9.0-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-273%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.10.0-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Test-286%20passed-success?style=flat-square">
 
 </p>
 
@@ -113,15 +113,18 @@ Checkpoint、Trace 与 Audit 始终职责分离，不共用业务表。Redis 本
 
 ### 🔐 Authentication Layer + RBAC
 
-v0.5.1 提供严格的 `User`、`Role`、`Permission` 与运行时 RBAC；HS256 JWT Authentication 在 v0.6.0 引入，并于 v0.9.0 正式固化为企业身份认证层：
+v0.5.1 提供严格的 `User`、`Role`、`Permission` 与运行时 RBAC；HS256 JWT Authentication 在 v0.6.0 引入，并于 v0.9.0 正式固化，v0.10.0 增加独立身份生命周期：
 
 - Bearer Token 经 PyJWT 验证 `sub`、`username`、`roles`、`iat` 和 `exp` 后转换为 `UserIdentity → UserContext`；
 - 身份错误返回 401，权限不足继续返回 403；
 - 认证成功与失败写入现有脱敏 Audit Store；
 - `UserContext` 只通过 FastAPI Dependency 与 LangGraph `RunnableConfig` 传递，不进入 State、Checkpoint、API Response 或 SSE；
+- v0.9 `create_token()` / `verify_token()` 兼容保留；新 Session-bound Access Token 默认 15 分钟，Refresh Token 默认 7 天并采用轮换与重用撤销；
+- API Key 绑定既有 `UserIdentity`，认证后仍必须经过 `UserContext` 和原 RBAC，不携带独立权限或 scope；
+- Identity Redis 使用独立 `IDENTITY_REDIS_URL`，不接入 Storage Protocol，也不影响 LangGraph Checkpoint Redis；
 - 配置至少 32 字节的 `JWT_SECRET_KEY` 后 Enterprise 写操作启用认证，未配置时仅在开发环境保留旧版本地兼容模式。
 
-当前不提供登录接口、密码存储、OAuth2、OIDC、JWKS、LDAP、AD、SSO、MFA、Refresh Token、Token Revocation 或用户数据库。JWT 认证也不替代 TLS、限流与严格 CORS；审批请求中的自由文本 `actor` 字段仍不是受认证身份来源。
+当前不提供登录、Refresh、Logout、Session 或 API Key 管理 HTTP 接口，也不提供密码存储、OAuth2、OIDC、JWKS、LDAP、AD、SSO、MFA、多租户或用户数据库。Identity 数据只存在于 Authentication Layer；Audit 仅记录 `session_id`、`key_id` 等非秘密引用，禁止记录 token、API key、refresh 或 secret hash。JWT 认证也不替代 TLS、限流与严格 CORS。
 
 
 ### 🚢 Production Deployment Layer
@@ -313,7 +316,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-272 passed, 1 optional PostgreSQL integration test skipped
+286 passed, 1 optional PostgreSQL integration test skipped
 
 OK
 ```
@@ -441,6 +444,17 @@ Completed:
 - Stable 401 authentication and 403 authorization semantics
 - Redacted authentication Audit events and legacy provider compatibility
 - Identity isolation from Workflow State, Checkpoint, API responses and SSE
+
+
+### v0.10.0 ✅ Enterprise Identity Enhancement
+
+Completed:
+
+- Session-bound access and rotating refresh tokens with reuse revocation
+- Independent in-memory and Redis IdentityStore implementations inside `auth`
+- API Key authentication bound to the existing `UserIdentity → UserContext → RBAC` path
+- Identity lifecycle audit references without credential hashes or fingerprints
+- Full compatibility for v0.9 legacy JWT creation and verification
 
 
 ### Future 🚧 Network Digital Twin Evolution
@@ -897,7 +911,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
@@ -1177,7 +1191,7 @@ NETWORKOPS_WORKFLOW_FACTORY=your_package.factory:create_workflow
 PROMETHEUS_ENABLED=true
 ```
 
-Compose 不提供默认密码，未填写必需变量时配置解析会失败。默认网关仅绑定 `127.0.0.1:8080`，Grafana 绑定 `127.0.0.1:3000`；Nginx 不对外暴露 `/metrics`。Redis 仅用作 LangGraph Checkpointer，不用作缓存、Memory 或队列。详见 [deployment/README.md](deployment/README.md)。
+Compose 不提供默认密码，未填写必需变量时配置解析会失败。默认网关仅绑定 `127.0.0.1:8080`，Grafana 绑定 `127.0.0.1:3000`；Nginx 不对外暴露 `/metrics`。`REDIS_URL` 仅用于 LangGraph Checkpointer，`IDENTITY_REDIS_URL` 使用独立数据库或实例并仅由 Authentication Layer 管理；两者均不用作 Agent Memory 或队列。详见 [deployment/README.md](deployment/README.md)。
 
 ## 13. License
 

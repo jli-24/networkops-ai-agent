@@ -14,6 +14,7 @@ from redis import Redis
 
 from network_agent_rag.api.enterprise import create_storage_enterprise_app
 from network_agent_rag.core.config import Settings
+from network_agent_rag.auth import JWTTokenManager
 from network_agent_rag.observability.deployment import (
     DeploymentMetricsMiddleware,
     RequestMetrics,
@@ -33,12 +34,25 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     if not factory_path:
         raise RuntimeError("workflow factory is required for deployment")
     workflow_factory = load_workflow_factory(factory_path)
+    identity_token_manager = None
+    if resolved.identity_redis_url:
+        if resolved.jwt_secret_key is None:
+            raise RuntimeError("identity authentication configuration is incomplete")
+        identity_token_manager = JWTTokenManager(
+            resolved.jwt_secret_key.get_secret_value(),
+            algorithm=resolved.jwt_algorithm,
+            expire_minutes=resolved.jwt_expire_minutes,
+            access_expire_minutes=resolved.jwt_access_expire_minutes,
+            refresh_expire_days=resolved.jwt_refresh_expire_days,
+        )
     application = create_storage_enterprise_app(
         observed_workflow_factory=workflow_factory,
         storage_backend=resolved.storage_backend,
         checkpoint_backend=resolved.checkpoint_backend,
         database_url=resolved.database_url,
         redis_url=resolved.redis_url,
+        identity_redis_url=resolved.identity_redis_url,
+        identity_token_manager=identity_token_manager,
     )
     install_deployment_features(application, resolved)
     return application
@@ -52,6 +66,8 @@ def validate_production_settings(settings: Settings) -> None:
         and settings.checkpoint_backend == "redis"
         and bool(settings.database_url)
         and bool(settings.redis_url)
+        and bool(settings.identity_redis_url)
+        and settings.identity_redis_url != settings.redis_url
         and settings.jwt_secret_key is not None
         and bool(settings.networkops_workflow_factory)
     )
@@ -94,8 +110,14 @@ def install_deployment_features(
         redis_status = "not_configured"
         if settings.storage_backend == "postgres" or settings.checkpoint_backend == "postgres":
             database_status = await _check(check_database, settings.database_url)
-        if settings.checkpoint_backend == "redis":
-            redis_status = await _check(check_redis, settings.redis_url)
+        if settings.checkpoint_backend == "redis" or settings.identity_redis_url:
+            urls = [
+                url
+                for url in (settings.redis_url, settings.identity_redis_url)
+                if url is not None
+            ]
+            checks = [await _check(check_redis, url) for url in dict.fromkeys(urls)]
+            redis_status = "ok" if checks and all(item == "ok" for item in checks) else "unavailable"
         ready = database_status != "unavailable" and redis_status != "unavailable"
         return JSONResponse(
             status_code=200 if ready else 503,
