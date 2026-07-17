@@ -35,9 +35,9 @@ class DeploymentSettingsTests(unittest.TestCase):
         project = tomllib.loads(
             (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         )
-        self.assertEqual(project["project"]["version"], "0.7.0")
-        self.assertEqual(network_agent_rag.__version__, "0.7.0")
-        self.assertEqual(importlib.metadata.version("networkops-ai-agent"), "0.7.0")
+        self.assertEqual(project["project"]["version"], "0.8.0")
+        self.assertEqual(network_agent_rag.__version__, "0.8.0")
+        self.assertEqual(importlib.metadata.version("networkops-ai-agent"), "0.8.0")
 
     def test_app_env_is_primary_and_environment_remains_compatible(self) -> None:
         with patch.dict(

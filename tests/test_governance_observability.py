@@ -419,7 +419,7 @@ class GovernanceTimelineTests(unittest.TestCase):
         forbidden = {"governance", "governance_events", "authorization_metrics"}
 
         self.assertTrue(forbidden.isdisjoint(EnterpriseState.__annotations__))
-        self.assertEqual(network_agent_rag.__version__, "0.7.0")
+        self.assertEqual(network_agent_rag.__version__, "0.8.0")
 
 
 if __name__ == "__main__":

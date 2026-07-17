@@ -957,7 +957,7 @@ def _audit_authorization(
         details={
             "actor_id": actor_id,
             "actor_role": actor_role,
-            "required_permission": permission.value,
+            "permission": permission.value,
         },
     )
 

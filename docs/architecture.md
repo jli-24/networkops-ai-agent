@@ -2,7 +2,7 @@
 
 ## System Overview
 
-NetworkOps AI Agent v0.7.0 keeps three compatible orchestration generations:
+NetworkOps AI Agent v0.8.0 keeps three compatible orchestration generations:
 
 - v0.1.0 keeps the general quality-control workflow and the dedicated single-agent diagnosis workflow;
 - v0.2.0 adds a supervisor-led multi-agent workflow without replacing the v0.1 entry points.
@@ -11,6 +11,7 @@ NetworkOps AI Agent v0.7.0 keeps three compatible orchestration generations:
 - v0.5.0-alpha adds pluggable production-storage adapters without changing workflow state or API responses.
 - v0.6.0 adds optional HS256 JWT authentication without replacing RBAC authorization.
 - v0.7.0 adds an explicit production deployment adapter and single-host container stack.
+- v0.8.0 formalizes the existing Enterprise Security Layer without adding a second authorization path.
 
 All workflows are dependency injected. The default FastAPI application does not create a model, vector store, or workflow automatically.
 
@@ -131,6 +132,31 @@ worker. Nginx keeps SSE unbuffered and blocks public access to `/metrics`.
 This is a single-host reference deployment. It does not include TLS certificate
 management, Kubernetes, Helm, a service mesh, automatic scaling, managed secret
 storage, database backups, or high availability.
+
+## v0.8.0 Enterprise Security Layer
+
+The Enterprise Workflow reuses the existing `UserContext`,
+`AuthorizationError`, `require_permission()`, and `authorizing_role()` APIs.
+Authorization runs before repair-plan creation, after approval interrupt resume,
+and before execution tracing, Tool Audit, or executor side effects. These stages
+require `CREATE_REPAIR_PLAN`, `APPROVE_REPAIR`, and `EXECUTE_REPAIR`
+respectively.
+
+When `rbac_contexts` is completely absent, direct local graph calls retain the
+legacy behavior. Once an incident enters explicit RBAC mode, invalid mappings,
+missing stage contexts, and insufficient permissions fail closed; checkpoint
+resume cannot downgrade the incident to legacy mode.
+
+Authorization decisions remain in the existing Audit schema. New Workflow
+events store actor ID, authorizing role, and permission in `details`, use fixed
+`authorize_repair_plan`, `authorize_approval`, or `authorize_execution` actions,
+and use top-level `allowed` or `denied` outcomes. Governance is a read-only
+projection of those records into permission, action, and decision.
+
+`UserContext` exists only in LangGraph `RunnableConfig`. It is not part of
+EnterpriseState, checkpoint values, API request or response schemas, or SSE
+payloads. The layer does not add login, OAuth2, LDAP, SSO, a user database, or a
+new permission model.
 
 ## Existing v0.1.0 Workflows
 

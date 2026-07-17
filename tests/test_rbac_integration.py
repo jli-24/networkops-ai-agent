@@ -211,6 +211,16 @@ class EnterpriseRBACWorkflowTests(unittest.TestCase):
         self.assertTrue(all(event.outcome == "allowed" for event in authorization))
         self.assertTrue(all(event.actor_id == "engineer-1" for event in authorization))
         self.assertTrue(all(event.actor_role == "Engineer" for event in authorization))
+        self.assertEqual(
+            [event.details["permission"] for event in authorization],
+            [
+                Permission.CREATE_REPAIR_PLAN.value,
+                Permission.EXECUTE_REPAIR.value,
+            ],
+        )
+        self.assertTrue(
+            all("required_permission" not in event.details for event in authorization)
+        )
 
     def test_admin_cannot_create_repair_plan(self) -> None:
         temporary, audit, saver, calls = self._resources()
@@ -477,6 +487,10 @@ class EnterpriseRBACWorkflowTests(unittest.TestCase):
         self.assertEqual(event.outcome, "denied")
         self.assertEqual(event.actor_id, "engineer-1")
         self.assertEqual(event.actor_role, "Engineer")
+        self.assertEqual(
+            event.details["permission"],
+            Permission.APPROVE_REPAIR.value,
+        )
 
     def test_unauthorized_execution_has_no_executor_or_trace_side_effect(self) -> None:
         temporary, audit, saver, calls = self._resources()

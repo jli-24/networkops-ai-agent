@@ -14,7 +14,7 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.7.0-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.8.0-blueviolet?style=flat-square">
 <img src="https://img.shields.io/badge/Test-272%20passed-success?style=flat-square">
 
 </p>
@@ -134,6 +134,20 @@ v0.7.0 新增独立部署适配器，不改造兼容入口 `main.py`，也不把
 - 部署专用中间件组合 Agent、HTTP 和授权决策的低基数 Prometheus 指标。
 
 Compose 是单机参考部署，所有密码必须通过本地 `.env` 显式提供。当前不包含 TLS 证书管理、托管 Secret、备份、高可用、Kubernetes、Helm、Service Mesh 或自动扩缩容；生产环境仍需由平台侧补齐这些能力。详见 [deployment/README.md](deployment/README.md)。
+
+
+### 🛡️ Enterprise Security Layer
+
+v0.8.0 正式固化现有 RBAC、Workflow Authorization、API Authorization 与 Governance Audit：
+
+- Repair Plan 创建前要求 `CREATE_REPAIR_PLAN`；
+- Approval interrupt 恢复后要求 `APPROVE_REPAIR`；
+- Trace 执行事件、Tool Audit 和 Executor 副作用前要求 `EXECUTE_REPAIR`；
+- 显式 RBAC 模式拒绝非法映射、缺失 `UserContext` 和权限不足，并阻止 Resume 降级回 legacy；
+- 授权 Audit 使用固定 `authorize_repair_plan`、`authorize_approval`、`authorize_execution` action，并记录 actor、role、permission 与 `allowed/denied`；
+- Governance 将 Audit 只读投影为 permission、action 和 decision。
+
+`UserContext` 只通过 LangGraph `RunnableConfig` 传入，不进入 Workflow State、Checkpoint、API Schema 或 SSE。完全未配置 `rbac_contexts` 时仍保留本地 legacy 兼容行为；该兼容模式不应作为不可信网络的生产授权策略。
 
 
 ### 🧪 Engineering Quality
@@ -407,6 +421,16 @@ Completed:
 - CI container build gate without image publishing
 
 
+### v0.8.0 ✅ Enterprise Security Layer
+
+Completed:
+
+- Three-stage Workflow Authorization for plan, approval and execution
+- Fail-closed explicit RBAC context validation with resume downgrade protection
+- Audit and Governance correlation for actor, permission and decision
+- RunnableConfig-only UserContext boundary
+
+
 ### Future 🚧 Network Digital Twin Evolution
 
 Planning:
@@ -423,9 +447,9 @@ Planning:
 Planning:
 
 - Multi-user support
-- Role-based access control
-- Persistent database
-- Application container deployment
+- External identity-provider and organization policy integration
+- Highly available state and audit storage operations
+- Multi-host container orchestration
 - Monitoring platform integration
 - Production environment adaptation
 
@@ -861,7 +885,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 增加可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 增加可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 正式固化 Enterprise Security Layer。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
