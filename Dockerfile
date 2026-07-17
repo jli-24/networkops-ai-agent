@@ -22,7 +22,7 @@ RUN groupadd --gid "${APP_GID}" networkops \
 
 WORKDIR /app
 
-COPY --from=builder /dist/networkops_ai_agent-0.8.0-py3-none-any.whl /tmp/networkops_ai_agent.whl
+COPY --from=builder /dist/networkops_ai_agent-0.9.0-py3-none-any.whl /tmp/networkops_ai_agent.whl
 RUN python -m pip install --no-cache-dir /tmp/networkops_ai_agent.whl \
     && rm /tmp/networkops_ai_agent.whl
 

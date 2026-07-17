@@ -2,7 +2,7 @@
 
 ## System Overview
 
-NetworkOps AI Agent v0.8.0 keeps three compatible orchestration generations:
+NetworkOps AI Agent v0.9.0 keeps three compatible orchestration generations:
 
 - v0.1.0 keeps the general quality-control workflow and the dedicated single-agent diagnosis workflow;
 - v0.2.0 adds a supervisor-led multi-agent workflow without replacing the v0.1 entry points.
@@ -12,6 +12,7 @@ NetworkOps AI Agent v0.8.0 keeps three compatible orchestration generations:
 - v0.6.0 adds optional HS256 JWT authentication without replacing RBAC authorization.
 - v0.7.0 adds an explicit production deployment adapter and single-host container stack.
 - v0.8.0 formalizes the existing Enterprise Security Layer without adding a second authorization path.
+- v0.9.0 formalizes the existing HS256 JWT Authentication Layer as the trusted identity source for RBAC.
 
 All workflows are dependency injected. The default FastAPI application does not create a model, vector store, or workflow automatically.
 
@@ -158,6 +159,41 @@ EnterpriseState, checkpoint values, API request or response schemas, or SSE
 payloads. The layer does not add login, OAuth2, LDAP, SSO, a user database, or a
 new permission model.
 
+## v0.9.0 Authentication Layer
+
+The Authentication Layer reuses the HS256/PyJWT implementation introduced in
+v0.6.0. `JWTProvider` validates a Bearer token with the configured secret and
+requires `sub`, `username`, `roles`, `iat`, and `exp`. A valid token becomes an
+immutable `UserIdentity`, then a `UserContext`; the existing RBAC layer alone
+decides what that identity may do.
+
+```text
+Bearer JWT
+    -> JWTProvider
+    -> UserIdentity
+    -> UserContext
+    -> RBAC Permission Check
+    -> LangGraph RunnableConfig
+    -> Enterprise Workflow
+```
+
+Missing, malformed, expired, future-issued, tampered, or incorrectly signed
+tokens return HTTP 401 with a Bearer challenge. Authenticated callers without
+the required permission return HTTP 403. Authentication Audit uses fixed
+`authenticate_success` and `authenticate_failed` actions and stores only actor
+ID, source, and decision; it does not store tokens, credentials, usernames,
+email addresses, or request bodies.
+
+Development keeps the explicit legacy provider path when authentication is not
+configured. Production requires an operator-provided JWT secret of at least 32
+bytes and never supplies a default. Authentication and legacy context providers
+are mutually exclusive. Identity objects remain outside Workflow State,
+Checkpoint, API schemas, and SSE payloads.
+
+The project does not implement OAuth2, OIDC, JWKS, LDAP, Active Directory, SSO,
+MFA, refresh tokens, token revocation, or a user database. The approval payload
+`actor` remains a business label and is not bound to the JWT subject.
+
 ## Existing v0.1.0 Workflows
 
 - The general workflow supports intent routing, document grading, query rewriting, answer generation, and answer checking.
@@ -174,4 +210,4 @@ new permission model.
 
 ## Safety
 
-The repository does not provide real device connectors or built-in change handlers. The v0.3 enterprise graph has interrupt/checkpoint approval and an allowlisted executor contract, but default execution is blocked. v0.6.0 can authenticate Enterprise API callers with HS256 JWT and apply RBAC; it does not provide login, token refresh/revocation, TLS, rate limiting, or a user database. The deployment adapter must remain behind a trusted gateway and platform security controls.
+The repository does not provide real device connectors or built-in change handlers. The v0.3 enterprise graph has interrupt/checkpoint approval and an allowlisted executor contract, but default execution is blocked. The HS256 JWT layer introduced in v0.6.0 and formalized in v0.9.0 can authenticate Enterprise API callers before existing RBAC checks; it does not provide login, token refresh/revocation, TLS, rate limiting, or a user database. The deployment adapter must remain behind a trusted gateway and platform security controls.

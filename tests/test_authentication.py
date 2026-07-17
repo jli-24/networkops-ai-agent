@@ -235,6 +235,43 @@ class JWTProviderTests(unittest.TestCase):
 
 
 class AuthenticationApiTests(unittest.TestCase):
+    def test_api_rejects_malformed_and_expired_bearer_tokens(self) -> None:
+        with TemporaryDirectory() as directory:
+            audit = SQLiteAuditLog(Path(directory) / "audit.sqlite3")
+            current = {"now": NOW}
+            manager = _manager(current)
+            expired_token = manager.create_token(_identity())
+            current["now"] = NOW + timedelta(minutes=31)
+            app = create_enterprise_app(
+                agent_workflow=build_graph(InMemorySaver(), audit, []),
+                audit_log=audit,
+                authentication_provider=JWTProvider(manager),
+            )
+            with TestClient(app) as client:
+                responses = (
+                    client.post(
+                        "/api/v1/incidents",
+                        headers={"Authorization": "Basic credentials"},
+                        json={"session_id": "session-1", "query": "repair link"},
+                    ),
+                    client.post(
+                        "/api/v1/incidents",
+                        headers={"Authorization": "Bearer"},
+                        json={"session_id": "session-1", "query": "repair link"},
+                    ),
+                    client.post(
+                        "/api/v1/incidents",
+                        headers={"Authorization": f"Bearer {expired_token}"},
+                        json={"session_id": "session-1", "query": "repair link"},
+                    ),
+                )
+
+        for response in responses:
+            with self.subTest(status=response.status_code):
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.json(), {"detail": "Unauthorized"})
+                self.assertEqual(response.headers["www-authenticate"], "Bearer")
+
     def test_api_separates_authentication_401_from_authorization_403(self) -> None:
         with TemporaryDirectory() as directory:
             audit = SQLiteAuditLog(Path(directory) / "audit.sqlite3")

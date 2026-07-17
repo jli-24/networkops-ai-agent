@@ -14,8 +14,8 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.8.0-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-272%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.9.0-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Test-273%20passed-success?style=flat-square">
 
 </p>
 
@@ -111,16 +111,17 @@ v0.5.0-alpha 在不移除 SQLite 的前提下增加可插拔存储：
 Checkpoint、Trace 与 Audit 始终职责分离，不共用业务表。Redis 本阶段仅用于 Checkpointer，不提供 Session Cache、Agent Memory、Queue 或 Pub/Sub。该版本面向新部署，不迁移既有 SQLite 数据；开发默认后端仍是 SQLite，生产部署适配器强制 PostgreSQL/Redis，连接失败时不会静默回退。
 
 
-### 🔐 Authentication + RBAC
+### 🔐 Authentication Layer + RBAC
 
-v0.5.1 提供严格的 `User`、`Role`、`Permission` 与运行时 RBAC；v0.6.0 新增可选的 HS256 JWT Authentication Layer：
+v0.5.1 提供严格的 `User`、`Role`、`Permission` 与运行时 RBAC；HS256 JWT Authentication 在 v0.6.0 引入，并于 v0.9.0 正式固化为企业身份认证层：
 
-- Bearer Token 经 PyJWT 验证后转换为 `UserIdentity → UserContext`；
+- Bearer Token 经 PyJWT 验证 `sub`、`username`、`roles`、`iat` 和 `exp` 后转换为 `UserIdentity → UserContext`；
 - 身份错误返回 401，权限不足继续返回 403；
 - 认证成功与失败写入现有脱敏 Audit Store；
-- 配置 `JWT_SECRET_KEY` 后 Enterprise 写操作启用认证，未配置时保留旧版本地兼容模式。
+- `UserContext` 只通过 FastAPI Dependency 与 LangGraph `RunnableConfig` 传递，不进入 State、Checkpoint、API Response 或 SSE；
+- 配置至少 32 字节的 `JWT_SECRET_KEY` 后 Enterprise 写操作启用认证，未配置时仅在开发环境保留旧版本地兼容模式。
 
-当前不提供登录接口、密码存储、Refresh Token、撤销列表、OAuth2、LDAP、SSO 或用户数据库。JWT 认证也不替代 TLS、限流与严格 CORS；审批请求中的自由文本 `actor` 字段仍不是受认证身份来源。
+当前不提供登录接口、密码存储、OAuth2、OIDC、JWKS、LDAP、AD、SSO、MFA、Refresh Token、Token Revocation 或用户数据库。JWT 认证也不替代 TLS、限流与严格 CORS；审批请求中的自由文本 `actor` 字段仍不是受认证身份来源。
 
 
 ### 🚢 Production Deployment Layer
@@ -429,6 +430,17 @@ Completed:
 - Fail-closed explicit RBAC context validation with resume downgrade protection
 - Audit and Governance correlation for actor, permission and decision
 - RunnableConfig-only UserContext boundary
+
+
+### v0.9.0 ✅ Authentication Layer Formalization
+
+Completed:
+
+- Fixed HS256 JWT identity contract with required claims and strict validation
+- Bearer JWT to `UserIdentity → UserContext → RBAC → RunnableConfig` integration
+- Stable 401 authentication and 403 authorization semantics
+- Redacted authentication Audit events and legacy provider compatibility
+- Identity isolation from Workflow State, Checkpoint, API responses and SSE
 
 
 ### Future 🚧 Network Digital Twin Evolution
@@ -885,7 +897,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 增加可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 正式固化 Enterprise Security Layer。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
