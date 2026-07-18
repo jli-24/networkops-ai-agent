@@ -45,8 +45,13 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             access_expire_minutes=resolved.jwt_access_expire_minutes,
             refresh_expire_days=resolved.jwt_refresh_expire_days,
         )
+    factory_argument = (
+        {"policy_workflow_factory": workflow_factory}
+        if resolved.policy_engine_enabled
+        else {"observed_workflow_factory": workflow_factory}
+    )
     application = create_storage_enterprise_app(
-        observed_workflow_factory=workflow_factory,
+        **factory_argument,
         storage_backend=resolved.storage_backend,
         checkpoint_backend=resolved.checkpoint_backend,
         database_url=resolved.database_url,
@@ -70,6 +75,7 @@ def validate_production_settings(settings: Settings) -> None:
         and settings.identity_redis_url != settings.redis_url
         and settings.jwt_secret_key is not None
         and bool(settings.networkops_workflow_factory)
+        and settings.policy_engine_enabled
     )
     if not valid:
         raise RuntimeError("invalid production deployment configuration")

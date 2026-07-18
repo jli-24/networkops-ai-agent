@@ -14,8 +14,8 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.11.0-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-302%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.12.0-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Test-319%20passed-success?style=flat-square">
 
 </p>
 
@@ -163,7 +163,20 @@ v0.11.0 在现有 Audit 与 Trace 事实之上增加独立、默认只读的治�
 - Compliance Report 聚合 Timeline、actor、action、approval、execution、verification evidence 与风险摘要，完整报告仅在内存返回；
 - Prometheus 在查询时增加 Security Event、授权拒绝、高风险操作和合规报告的低基数计数。
 
-Governance 仅允许向现有 Audit Store 追加 `security_event_created`、`risk_assessment_created` 和 `compliance_report_generated` 三个固定 action；不得修改 Workflow、Agent、Repair、Identity、RBAC、Checkpoint、Trace 或 Metrics 状态。本版本不新增公开 Governance API、OIDC、OAuth2、ABAC、多租户或 Policy Engine。
+Governance 仅允许向现有 Audit Store 追加 `security_event_created`、`risk_assessment_created` 和 `compliance_report_generated` 三个固定 action；不得修改 Workflow、Agent、Repair、Identity、RBAC、Checkpoint、Trace 或 Metrics 状态。本版本不新增公开 Governance API、OIDC、OAuth2、ABAC 或多租户。
+
+
+### 🛡️ Agent Policy Engine
+
+v0.12.0 在 RBAC 与执行副作用之间增加独立、确定性的上下文策略门禁：
+
+- Authentication 确认身份，RBAC 确认权限，Policy Engine 判断当前操作上下文是否允许执行；
+- Policy 使用冻结的运行时 `PolicyContext`，按显式工具白名单、操作、权限、角色、风险等级和设备数量执行纯规则判断；
+- 决策固定为 `DENY > REQUIRE_APPROVAL > ALLOW`，未知工具或无匹配规则默认拒绝；
+- 每个 Repair Action 独立评估；设备数量条件使用同一 Repair Plan 的去重目标集合，`REQUIRE_APPROVAL` 复用现有 Human Approval，`DENY` 在 Trace、Tool Audit 和 Executor 前无副作用阻断；
+- 固定 Audit action 为 `policy_evaluation`、`policy_denied` 和 `policy_approval_required`，Governance 将后两类投影为既有安全事件。
+
+Policy Engine 不替代 Authentication、RBAC、RiskCheck 或 Human Approval。`PolicyContext` 与 `PolicyDecision` 只存在于节点运行期间，不进入 Workflow State、Checkpoint、API Response 或 SSE。未注入 Policy Engine 的旧工作流工厂保持兼容；生产部署要求显式启用 Policy-aware factory，禁止静默降级。
 
 
 ### 🧪 Engineering Quality
@@ -480,6 +493,17 @@ Completed:
 - Strict read-only defaults with only three explicit append-only Audit actions
 
 
+### v0.12.0 ✅ Agent Policy Engine
+
+Completed:
+
+- Deterministic execution-time policy evaluation after RBAC authorization
+- Explicit tool-to-operation allowlist and default-deny behavior
+- Per-action `ALLOW`, `DENY`, and existing-approval decisions with fixed precedence
+- Side-effect-free denial before execution Trace, Tool Audit, and executor calls
+- Audit and Governance projection without Policy objects entering persisted state
+
+
 ### Future 🚧 Network Digital Twin Evolution
 
 Planning:
@@ -536,6 +560,7 @@ Planning:
 - v0.3.0 Enterprise Workflow：SQLite checkpoint、事件恢复、运行时审批、白名单执行器注入和脱敏审计；
 - v0.4.0 Enterprise Observability：父子执行 Span、指标、事件时间线、离线 Benchmark 与增强 Streamlit Dashboard；
 - v0.11.0 Governance & Compliance Layer：只读 Security Event 投影、确定性风险评分、即时合规报告及三个固定追加式 Audit action；
+- v0.12.0 Agent Policy Engine：显式工具分类、确定性上下文规则、默认拒绝及现有审批流程复用；
 - 带文本层的 PDF、Markdown、TXT 文档加载，标题层级与 CLI 命令块保留；
 - BGE-M3 Embedding、Chroma 集合重建与语义检索；
 - 基于 NetworkX 的设备、关系、最短路径和双向接口查询；
@@ -935,7 +960,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影，v0.12.0 增加确定性的 Agent Policy Engine。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 

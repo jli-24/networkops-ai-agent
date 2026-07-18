@@ -35,9 +35,9 @@ class DeploymentSettingsTests(unittest.TestCase):
         project = tomllib.loads(
             (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         )
-        self.assertEqual(project["project"]["version"], "0.11.0")
-        self.assertEqual(network_agent_rag.__version__, "0.11.0")
-        self.assertEqual(importlib.metadata.version("networkops-ai-agent"), "0.11.0")
+        self.assertEqual(project["project"]["version"], "0.12.0")
+        self.assertEqual(network_agent_rag.__version__, "0.12.0")
+        self.assertEqual(importlib.metadata.version("networkops-ai-agent"), "0.12.0")
 
     def test_app_env_is_primary_and_environment_remains_compatible(self) -> None:
         with patch.dict(
@@ -58,6 +58,7 @@ class DeploymentSettingsTests(unittest.TestCase):
         self.assertEqual(settings.storage_backend, "sqlite")
         self.assertEqual(settings.checkpoint_backend, "sqlite")
         self.assertFalse(settings.prometheus_enabled)
+        self.assertTrue(settings.policy_engine_enabled)
         self.assertIsNone(settings.networkops_workflow_factory)
 
 
@@ -90,6 +91,7 @@ class DeploymentFactoryTests(unittest.TestCase):
             {"identity_redis_url": "redis://:secret@redis/0"},
             {"jwt_secret_key": None},
             {"networkops_workflow_factory": None},
+            {"policy_engine_enabled": False},
         )
         for update in invalid:
             with self.subTest(update=next(iter(update))):
@@ -149,7 +151,7 @@ class DeploymentFactoryTests(unittest.TestCase):
         self.assertIs(result, application)
         storage_factory.assert_called_once()
         arguments = storage_factory.call_args.kwargs
-        self.assertIs(arguments["observed_workflow_factory"], workflow_factory)
+        self.assertIn("policy_workflow_factory", arguments)
         self.assertEqual(arguments["storage_backend"], "postgres")
         self.assertEqual(arguments["checkpoint_backend"], "redis")
         self.assertEqual(arguments["database_url"], settings.database_url)
@@ -301,7 +303,7 @@ class DeploymentFilesTests(unittest.TestCase):
         self.assertIn("python:3.11", dockerfile)
         self.assertIn("USER networkops", dockerfile)
         self.assertIn("HEALTHCHECK", dockerfile)
-        self.assertIn("networkops_ai_agent-0.11.0-py3-none-any.whl", dockerfile)
+        self.assertIn("networkops_ai_agent-0.12.0-py3-none-any.whl", dockerfile)
         self.assertNotIn("--reload", dockerfile)
         for service in (
             "nginx:",

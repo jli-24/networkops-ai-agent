@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     jwt_access_expire_minutes: int = Field(default=15, gt=0)
     jwt_refresh_expire_days: int = Field(default=7, gt=0)
     prometheus_enabled: bool = False
+    policy_engine_enabled: bool = True
     networkops_workflow_factory: str | None = None
     approval_ttl_seconds: int = 1800
     langgraph_strict_msgpack: bool = True

@@ -46,6 +46,13 @@ from network_agent_rag.observability import (
     TraceEventStatus,
     TraceEventType,
 )
+from network_agent_rag.policy import (
+    PolicyEffect,
+    PolicyEngine,
+    PolicyEvaluation,
+    aggregate_effect,
+    evaluate_actions,
+)
 from network_agent_rag.storage.base import AuditStore, TraceStore
 
 
@@ -82,6 +89,7 @@ def create_enterprise_workflow(
     build_repair_plan: Callable[[EnterpriseState], RepairPlan] | None = None,
     plan_actions: Callable[[EnterpriseState], list[RepairAction]] | None = None,
     action_executor: AllowlistedExecutor | None = None,
+    policy_engine: PolicyEngine | None = None,
     clock: Callable[[], datetime] | None = None,
     approval_ttl_seconds: int = 1800,
     max_quality_iterations: int = 3,
@@ -91,6 +99,8 @@ def create_enterprise_workflow(
 
     if approval_ttl_seconds <= 0:
         raise ValueError("approval_ttl_seconds must be positive")
+    if policy_engine is not None and audit_log is None:
+        raise ValueError("audit_log is required when policy_engine is configured")
     now = clock or (lambda: datetime.now(timezone.utc))
     retry_policy = RetryPolicy(
         initial_interval=0.0,
@@ -302,16 +312,48 @@ def create_enterprise_workflow(
             state["incident_id"],
             SpanKind.DECISION,
             "RiskCheck",
-            lambda _span_id: _risk_check(state),
+            lambda _span_id: _risk_check(state, config),
             trace_collector=trace_collector,
         )
 
-    def _risk_check(state: EnterpriseState) -> dict[str, object]:
+    def _risk_check(
+        state: EnterpriseState, config: RunnableConfig
+    ) -> dict[str, object]:
         decision = evaluate_risk(
             state,
             now=now(),
             approval_ttl_seconds=approval_ttl_seconds,
         )
+        if policy_engine is not None:
+            context = _policy_execution_context(config)
+            evaluations = evaluate_actions(
+                policy_engine,
+                context,
+                state["proposed_actions"],
+                risk_level=decision["risk_level"],
+                timestamp=now(),
+            )
+            effect = aggregate_effect(evaluations)
+            _audit_policy_evaluations(
+                audit_log,
+                state["incident_id"],
+                decision["plan_digest"],
+                context,
+                evaluations,
+            )
+            reasons = list(decision["reasons"])
+            if effect == PolicyEffect.DENY:
+                decision = {
+                    **decision,
+                    "approval_required": False,
+                    "reasons": [*reasons, "policy denied execution"],
+                }
+            elif effect == PolicyEffect.REQUIRE_APPROVAL:
+                decision = {
+                    **decision,
+                    "approval_required": True,
+                    "reasons": [*reasons, "policy requires approval"],
+                }
         status = "pending_approval" if decision["approval_required"] else "running"
         _audit(
             audit_log,
@@ -421,6 +463,42 @@ def create_enterprise_workflow(
             audit_log=audit_log,
             incident_id=state["incident_id"],
         )
+        if policy_engine is not None:
+            context = _policy_execution_context(config)
+            risk = state.get("risk_decision")
+            if not isinstance(risk, dict):
+                raise ValueError("risk_decision is required for policy evaluation")
+            evaluations = evaluate_actions(
+                policy_engine,
+                context,
+                state["proposed_actions"],
+                risk_level=risk["risk_level"],
+                timestamp=now(),
+            )
+            effect = aggregate_effect(evaluations)
+            _audit_policy_evaluations(
+                audit_log,
+                state["incident_id"],
+                risk["plan_digest"],
+                context,
+                evaluations,
+            )
+            if effect == PolicyEffect.DENY:
+                return _policy_blocked(
+                    state,
+                    "POLICY_DENIED",
+                    "Policy denied the proposed execution; no action was executed.",
+                )
+            approval = state.get("approval_result")
+            if effect == PolicyEffect.REQUIRE_APPROVAL and (
+                not isinstance(approval, dict)
+                or approval.get("decision") != "approve"
+            ):
+                return _policy_blocked(
+                    state,
+                    "POLICY_APPROVAL_REQUIRED",
+                    "Policy requires existing human approval before execution.",
+                )
         context = _collector_context(config)
         if trace_collector is not None and context is not None:
             actions = state["proposed_actions"]
@@ -921,6 +999,83 @@ def _rbac_contexts(
     ):
         raise TypeError("rbac_contexts must be a mapping of phase names to UserContext")
     return contexts
+
+
+def _policy_execution_context(config: RunnableConfig) -> UserContext:
+    contexts = _rbac_contexts(config)
+    context = contexts.get("execution") if contexts is not None else None
+    if context is None:
+        raise AuthorizationError("anonymous", Permission.EXECUTE_REPAIR)
+    require_permission(context, Permission.EXECUTE_REPAIR)
+    return context
+
+
+def _audit_policy_evaluations(
+    audit_log: AuditStore | None,
+    incident_id: str,
+    plan_digest: str,
+    context: UserContext,
+    evaluations: tuple[PolicyEvaluation, ...],
+) -> None:
+    for evaluation in evaluations:
+        decision = evaluation.decision.decision
+        details = {
+            "policy_id": evaluation.decision.decision_id,
+            "decision": decision.value,
+            "operation": evaluation.context.operation.value,
+            "risk_level": evaluation.context.risk_level.value,
+        }
+        key = f"policy:{plan_digest}:{evaluation.action_id}"
+        _audit(
+            audit_log,
+            incident_id=incident_id,
+            event_type=AuditEventType.DECISION,
+            actor=context.user.user_id,
+            action="policy_evaluation",
+            outcome="evaluated",
+            details=details,
+            idempotency_key=f"{key}:evaluation",
+        )
+        if decision == PolicyEffect.DENY:
+            _audit(
+                audit_log,
+                incident_id=incident_id,
+                event_type=AuditEventType.DECISION,
+                actor=context.user.user_id,
+                action="policy_denied",
+                outcome="denied",
+                details=details,
+                idempotency_key=f"{key}:denied",
+            )
+        elif decision == PolicyEffect.REQUIRE_APPROVAL:
+            _audit(
+                audit_log,
+                incident_id=incident_id,
+                event_type=AuditEventType.DECISION,
+                actor=context.user.user_id,
+                action="policy_approval_required",
+                outcome="approval_required",
+                details=details,
+                idempotency_key=f"{key}:approval",
+            )
+
+
+def _policy_blocked(
+    state: EnterpriseState,
+    error_code: str,
+    message: str,
+) -> dict[str, object]:
+    result = {
+        "status": "blocked",
+        "actions": [],
+        "error_code": error_code,
+        "message": message,
+    }
+    return {
+        "execution_result": result,
+        "enterprise_status": "failed",
+        "error": f"{error_code}: {message}",
+    }
 
 
 def _incident_uses_rbac(

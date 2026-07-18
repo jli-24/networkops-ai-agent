@@ -121,6 +121,13 @@ def _from_audit(event: AuditEvent) -> list[SecurityEvent]:
         )
     if event.action == "policy_violation":
         mappings.append((SecurityEventType.POLICY_VIOLATION, GovernanceSeverity.HIGH))
+    if event.action == "policy_denied" and event.outcome == "denied":
+        mappings.append((SecurityEventType.POLICY_VIOLATION, GovernanceSeverity.HIGH))
+    if (
+        event.action == "policy_approval_required"
+        and event.outcome == "approval_required"
+    ):
+        mappings.append((SecurityEventType.APPROVAL_REQUIRED, GovernanceSeverity.MEDIUM))
     if event.action == "evaluate_risk" and event.outcome == "approval_required":
         mappings.append((SecurityEventType.APPROVAL_REQUIRED, GovernanceSeverity.MEDIUM))
         level = event.details.get("risk_level")

@@ -2,7 +2,7 @@
 
 ## System Overview
 
-NetworkOps AI Agent v0.11.0 keeps three compatible orchestration generations:
+NetworkOps AI Agent v0.12.0 keeps three compatible orchestration generations:
 
 - v0.1.0 keeps the general quality-control workflow and the dedicated single-agent diagnosis workflow;
 - v0.2.0 adds a supervisor-led multi-agent workflow without replacing the v0.1 entry points.
@@ -15,6 +15,7 @@ NetworkOps AI Agent v0.11.0 keeps three compatible orchestration generations:
 - v0.9.0 formalizes the existing HS256 JWT Authentication Layer as the trusted identity source for RBAC.
 - v0.10.0 adds an auth-owned identity lifecycle without changing workflow state or API contracts.
 - v0.11.0 adds read-only governance projections, deterministic risk scoring, and ephemeral compliance reports over existing Audit and Trace facts.
+- v0.12.0 adds a deterministic policy gate between RBAC authorization and execution side effects.
 
 All workflows are dependency injected. The default FastAPI application does not create a model, vector store, or workflow automatically.
 
@@ -255,8 +256,42 @@ report ID, evidence counts, risk level, and a canonical SHA-256 digest.
 
 The existing `/metrics` exposition adds low-cardinality Security Event,
 authorization-denial, high-risk-operation, and compliance-report counters. No
-new public Governance HTTP API, policy engine, ABAC, tenant model, OAuth2, or
+new public Governance HTTP API, ABAC, tenant model, OAuth2, or
 OIDC integration is introduced.
+
+## v0.12.0 Agent Policy Engine
+
+The `policy` package is an independent deterministic execution gate. It does
+not add a LangGraph node or change EnterpriseState. Policy input and output are
+runtime-only objects built after the existing execution RBAC check.
+
+```text
+Authentication -> UserContext -> RBAC -> Policy Engine
+    -> RiskCheck / existing Approval -> Trace -> Tool Audit -> Executor
+    -> Audit -> Governance
+```
+
+The registry is immutable after construction and maps every supported tool to
+an operation explicitly. Conditions support only AND-combined operation, risk,
+permission, role, and device-count constraints. Unknown tools and unmatched
+contexts are denied. Every action is evaluated separately, while device-count
+conditions use the deduplicated target set for the complete Repair Plan. When
+several rules or Repair Actions apply, precedence is
+`DENY > REQUIRE_APPROVAL > ALLOW`; a canonical SHA-256 makes identical inputs
+produce the same decision identifier.
+
+`REQUIRE_APPROVAL` reuses the existing interrupt/checkpoint approval flow.
+`DENY` returns the existing blocked execution result before execution Trace,
+Tool Audit, or executor side effects. Policy Audit uses fixed actions and
+allowlisted details; Governance maps denial and approval-required facts to the
+existing security-event types.
+
+The policy-aware workflow factory is explicit and receives a `PolicyEngine`.
+Legacy factories remain compatible when no engine is injected. Production
+configuration requires `POLICY_ENGINE_ENABLED=true` and fails startup rather
+than silently falling back. Policy does not replace Authentication, RBAC,
+RiskCheck, Human Approval, Audit, or Governance, and Policy objects never enter
+State, Checkpoint, API responses, or SSE.
 
 ## Existing v0.1.0 Workflows
 

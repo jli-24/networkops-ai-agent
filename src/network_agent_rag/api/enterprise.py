@@ -68,6 +68,7 @@ from network_agent_rag.observability import (
     load_trace_events,
 )
 from network_agent_rag.evaluation import BenchmarkResultStore
+from network_agent_rag.policy import PolicyEngine, default_policy_registry
 from network_agent_rag.storage.base import AuditStore, TraceStore
 from network_agent_rag.storage.postgres import (
     open_postgres_checkpointer,
@@ -97,6 +98,19 @@ class ObservedWorkflowFactory(Protocol):
         self,
         checkpointer: Any,
         *,
+        audit_log: AuditStore | None = None,
+        trace_store: TraceStore | None = None,
+        metrics_store: MetricsStore | None = None,
+        trace_collector: TraceCollector | None = None,
+    ) -> Any: ...
+
+
+class PolicyWorkflowFactory(Protocol):
+    def __call__(
+        self,
+        checkpointer: Any,
+        *,
+        policy_engine: PolicyEngine,
         audit_log: AuditStore | None = None,
         trace_store: TraceStore | None = None,
         metrics_store: MetricsStore | None = None,
@@ -159,6 +173,7 @@ def create_sqlite_enterprise_app(
     *,
     workflow_factory: LegacyWorkflowFactory | None = None,
     observed_workflow_factory: ObservedWorkflowFactory | None = None,
+    policy_workflow_factory: PolicyWorkflowFactory | None = None,
     checkpoint_path: str | Path | None = None,
     audit_path: str | Path | None = None,
     observability_path: str | Path | None = None,
@@ -169,9 +184,16 @@ def create_sqlite_enterprise_app(
 ) -> FastAPI:
     """Create an app whose lifespan owns the async SQLite checkpointer."""
 
-    if (workflow_factory is None) == (observed_workflow_factory is None):
+    if sum(
+        factory is not None
+        for factory in (
+            workflow_factory,
+            observed_workflow_factory,
+            policy_workflow_factory,
+        )
+    ) != 1:
         raise ValueError(
-            "configure exactly one of workflow_factory or observed_workflow_factory"
+            "configure exactly one workflow factory"
         )
 
     settings = Settings()
@@ -201,7 +223,16 @@ def create_sqlite_enterprise_app(
         benchmark_store = BenchmarkResultStore(benchmark_results)
         async with AsyncSqliteSaver.from_conn_string(str(checkpoint)) as saver:
             await saver.setup()
-            if observed_workflow_factory is not None:
+            if policy_workflow_factory is not None:
+                workflow = policy_workflow_factory(
+                    saver,
+                    policy_engine=PolicyEngine(default_policy_registry()),
+                    audit_log=audit_log,
+                    trace_store=trace_store,
+                    metrics_store=metrics_store,
+                    trace_collector=trace_collector,
+                )
+            elif observed_workflow_factory is not None:
                 workflow = observed_workflow_factory(
                     saver,
                     audit_log=audit_log,
@@ -232,6 +263,7 @@ def create_storage_enterprise_app(
     *,
     workflow_factory: LegacyWorkflowFactory | None = None,
     observed_workflow_factory: ObservedWorkflowFactory | None = None,
+    policy_workflow_factory: PolicyWorkflowFactory | None = None,
     storage_backend: str | None = None,
     checkpoint_backend: str | None = None,
     database_url: str | None = None,
@@ -248,9 +280,16 @@ def create_storage_enterprise_app(
 ) -> FastAPI:
     """Create an enterprise app with independently selected storage domains."""
 
-    if (workflow_factory is None) == (observed_workflow_factory is None):
+    if sum(
+        factory is not None
+        for factory in (
+            workflow_factory,
+            observed_workflow_factory,
+            policy_workflow_factory,
+        )
+    ) != 1:
         raise ValueError(
-            "configure exactly one of workflow_factory or observed_workflow_factory"
+            "configure exactly one workflow factory"
         )
     settings = Settings()
     identity_redis = (
@@ -327,7 +366,16 @@ def create_storage_enterprise_app(
                     database_url=database,
                     redis_url=redis,
                 ) as saver:
-                    if observed_workflow_factory is not None:
+                    if policy_workflow_factory is not None:
+                        workflow = policy_workflow_factory(
+                            saver,
+                            policy_engine=PolicyEngine(default_policy_registry()),
+                            audit_log=audit_log,
+                            trace_store=trace_store,
+                            metrics_store=metrics_store,
+                            trace_collector=trace_collector,
+                        )
+                    elif observed_workflow_factory is not None:
                         workflow = observed_workflow_factory(
                             saver,
                             audit_log=audit_log,
@@ -909,6 +957,7 @@ def _sse(event: str, data: dict[str, object]) -> str:
 __all__ = [
     "LegacyWorkflowFactory",
     "ObservedWorkflowFactory",
+    "PolicyWorkflowFactory",
     "create_enterprise_app",
     "create_sqlite_enterprise_app",
     "create_storage_enterprise_app",

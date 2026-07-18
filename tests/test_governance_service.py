@@ -202,6 +202,37 @@ class GovernanceServiceTests(unittest.TestCase):
 
         self.assertEqual(self.service.query_events(incident_id="INC-GOV-1"), ())
 
+    def test_policy_actions_reuse_existing_security_event_types(self) -> None:
+        self._audit(
+            "policy_evaluation",
+            "evaluated",
+            details={"decision": "DENY", "operation": "unknown"},
+        )
+        self._audit(
+            "policy_denied",
+            "denied",
+            details={"decision": "DENY", "operation": "unknown"},
+        )
+        self._audit(
+            "policy_approval_required",
+            "approval_required",
+            details={
+                "decision": "REQUIRE_APPROVAL",
+                "operation": "restart_device",
+            },
+        )
+
+        events = self.service.query_events(incident_id="INC-GOV-1")
+
+        self.assertEqual(
+            {event.event_type for event in events},
+            {
+                SecurityEventType.POLICY_VIOLATION,
+                SecurityEventType.APPROVAL_REQUIRED,
+            },
+        )
+        self.assertNotIn("policy_evaluation", {event.action for event in events})
+
     def test_prometheus_exposes_low_cardinality_governance_metrics(self) -> None:
         self._audit(
             "authorize_execution",
