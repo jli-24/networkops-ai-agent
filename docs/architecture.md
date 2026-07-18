@@ -2,7 +2,7 @@
 
 ## System Overview
 
-NetworkOps AI Agent v0.10.0 keeps three compatible orchestration generations:
+NetworkOps AI Agent v0.11.0 keeps three compatible orchestration generations:
 
 - v0.1.0 keeps the general quality-control workflow and the dedicated single-agent diagnosis workflow;
 - v0.2.0 adds a supervisor-led multi-agent workflow without replacing the v0.1 entry points.
@@ -14,6 +14,7 @@ NetworkOps AI Agent v0.10.0 keeps three compatible orchestration generations:
 - v0.8.0 formalizes the existing Enterprise Security Layer without adding a second authorization path.
 - v0.9.0 formalizes the existing HS256 JWT Authentication Layer as the trusted identity source for RBAC.
 - v0.10.0 adds an auth-owned identity lifecycle without changing workflow state or API contracts.
+- v0.11.0 adds read-only governance projections, deterministic risk scoring, and ephemeral compliance reports over existing Audit and Trace facts.
 
 All workflows are dependency injected. The default FastAPI application does not create a model, vector store, or workflow automatically.
 
@@ -220,6 +221,42 @@ Audit records only non-secret references such as `session_id` and `key_id`.
 Tokens, API keys, credential hashes, secret hashes, and fingerprints are not
 projected into Audit, Trace, Metrics, Governance, State, Checkpoint, SSE, or API
 responses. No identity-management HTTP routes are added in this release.
+
+## v0.11.0 Governance & Compliance Layer
+
+The top-level `governance` package composes the existing Audit Store, Trace
+Store, authorization projection, and Incident Timeline. It does not participate
+in LangGraph execution and cannot mutate Workflow, Agent, Repair, Identity,
+RBAC, Checkpoint, Trace, or Metrics state.
+
+```text
+Audit + Trace
+     |
+     v
+Security Event Center
+     +--> deterministic RiskScorer
+     +--> in-memory Compliance Report
+     +--> query-time Prometheus counters
+```
+
+Governance methods are read-only unless they perform one of three explicit
+append-only Audit operations: `sync_security_events()` writes only
+`security_event_created`, risk calculation writes only
+`risk_assessment_created`, and report generation writes only
+`compliance_report_generated`. No Audit, Trace, Metrics, Checkpoint, or Storage
+schema changes are required.
+
+Security Events retain only minimal references to source Audit or Trace facts.
+Risk scoring is a deterministic 0-100 ruleset based on operation type, target
+device count, authorization-denial history, and repair-failure history; roles
+are attribution only and do not change the score. Compliance reports are strict
+in-memory models. Their full content is not persisted; Audit records only the
+report ID, evidence counts, risk level, and a canonical SHA-256 digest.
+
+The existing `/metrics` exposition adds low-cardinality Security Event,
+authorization-denial, high-risk-operation, and compliance-report counters. No
+new public Governance HTTP API, policy engine, ABAC, tenant model, OAuth2, or
+OIDC integration is introduced.
 
 ## Existing v0.1.0 Workflows
 

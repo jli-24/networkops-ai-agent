@@ -12,6 +12,7 @@ from starlette.responses import PlainTextResponse, Response
 
 from network_agent_rag.observability.governance import GovernanceQuery
 from network_agent_rag.observability.metrics import MetricsService
+from network_agent_rag.governance.events import SecurityEventCenter
 
 
 class RequestMetrics:
@@ -185,6 +186,66 @@ def render_deployment_metrics(
                     permission=item.permission.value,
                 )
                 parts.append(f"networkops_authorization_total{{{labels}}} {count}\n")
+        parts.extend(
+            [
+                "# HELP networkops_authorization_denied_total Denied authorization decisions by permission.\n",
+                "# TYPE networkops_authorization_denied_total counter\n",
+            ]
+        )
+        for item in authorization.by_permission:
+            labels = _labels(permission=item.permission.value)
+            parts.append(
+                f"networkops_authorization_denied_total{{{labels}}} {item.denied}\n"
+            )
+        if trace_store is not None:
+            security_counts = Counter(
+                (event.event_type.value, event.severity.value)
+                for event in SecurityEventCenter(audit_log, trace_store).query()
+            )
+            parts.extend(
+                [
+                    "# HELP networkops_security_events_total Projected security events by type and severity.\n",
+                    "# TYPE networkops_security_events_total counter\n",
+                ]
+            )
+            for (event_type, severity), count in sorted(security_counts.items()):
+                labels = _labels(event_type=event_type, severity=severity)
+                parts.append(f"networkops_security_events_total{{{labels}}} {count}\n")
+        audit_events = audit_log.list_all_events(event_type="decision")
+        risk_counts = Counter(
+            str(event.details["risk_level"])
+            for event in audit_events
+            if event.action == "risk_assessment_created"
+            and event.details.get("risk_level") in {"high", "critical"}
+        )
+        parts.extend(
+            [
+                "# HELP networkops_high_risk_operations_total High-risk governance assessments.\n",
+                "# TYPE networkops_high_risk_operations_total counter\n",
+            ]
+        )
+        for risk_level, count in sorted(risk_counts.items()):
+            parts.append(
+                "networkops_high_risk_operations_total"
+                f"{{{_labels(risk_level=risk_level)}}} {count}\n"
+            )
+        report_counts = Counter(
+            str(event.details["report_type"])
+            for event in audit_events
+            if event.action == "compliance_report_generated"
+            and isinstance(event.details.get("report_type"), str)
+        )
+        parts.extend(
+            [
+                "# HELP networkops_compliance_reports_total Generated compliance reports by type.\n",
+                "# TYPE networkops_compliance_reports_total counter\n",
+            ]
+        )
+        for report_type, count in sorted(report_counts.items()):
+            parts.append(
+                "networkops_compliance_reports_total"
+                f"{{{_labels(report_type=report_type)}}} {count}\n"
+            )
     parts.append(registry.render_prometheus())
     return "".join(parts)
 

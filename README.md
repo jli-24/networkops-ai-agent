@@ -14,8 +14,8 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.10.0-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-286%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.11.0-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Test-302%20passed-success?style=flat-square">
 
 </p>
 
@@ -152,6 +152,18 @@ v0.8.0 正式固化现有 RBAC、Workflow Authorization、API Authorization 与 
 - Governance 将 Audit 只读投影为 permission、action 和 decision。
 
 `UserContext` 只通过 LangGraph `RunnableConfig` 传入，不进入 Workflow State、Checkpoint、API Schema 或 SSE。完全未配置 `rbac_contexts` 时仍保留本地 legacy 兼容行为；该兼容模式不应作为不可信网络的生产授权策略。
+
+
+### 🧭 Governance & Compliance Layer
+
+v0.11.0 在现有 Audit 与 Trace 事实之上增加独立、默认只读的治理层：
+
+- Security Event Center 投影认证失败、授权拒绝、审批要求、高风险操作、修复失败和会话撤销，不复制源 payload；
+- Risk Scorer 使用操作类型、设备范围、授权拒绝历史和修复失败历史进行确定性 0–100 评分，不使用 LLM，也不替代 RBAC 或 Workflow 风险判断；
+- Compliance Report 聚合 Timeline、actor、action、approval、execution、verification evidence 与风险摘要，完整报告仅在内存返回；
+- Prometheus 在查询时增加 Security Event、授权拒绝、高风险操作和合规报告的低基数计数。
+
+Governance 仅允许向现有 Audit Store 追加 `security_event_created`、`risk_assessment_created` 和 `compliance_report_generated` 三个固定 action；不得修改 Workflow、Agent、Repair、Identity、RBAC、Checkpoint、Trace 或 Metrics 状态。本版本不新增公开 Governance API、OIDC、OAuth2、ABAC、多租户或 Policy Engine。
 
 
 ### 🧪 Engineering Quality
@@ -457,6 +469,17 @@ Completed:
 - Full compatibility for v0.9 legacy JWT creation and verification
 
 
+### v0.11.0 ✅ Governance & Compliance Layer
+
+Completed:
+
+- Minimal Security Event projections over existing Audit and Trace facts
+- Deterministic, explainable 0-100 risk scoring without LLM decisions
+- Ephemeral compliance reports with Audit-only identifiers and SHA-256 linkage
+- Query-time, low-cardinality Governance Prometheus counters
+- Strict read-only defaults with only three explicit append-only Audit actions
+
+
 ### Future 🚧 Network Digital Twin Evolution
 
 Planning:
@@ -512,6 +535,7 @@ Planning:
 - v0.2.2 Fault Propagation Simulator：只读网关可达性分析、受影响设备/链路/服务范围和归一化影响评分；
 - v0.3.0 Enterprise Workflow：SQLite checkpoint、事件恢复、运行时审批、白名单执行器注入和脱敏审计；
 - v0.4.0 Enterprise Observability：父子执行 Span、指标、事件时间线、离线 Benchmark 与增强 Streamlit Dashboard；
+- v0.11.0 Governance & Compliance Layer：只读 Security Event 投影、确定性风险评分、即时合规报告及三个固定追加式 Audit action；
 - 带文本层的 PDF、Markdown、TXT 文档加载，标题层级与 CLI 命令块保留；
 - BGE-M3 Embedding、Chroma 集合重建与语义检索；
 - 基于 NetworkX 的设备、关系、最短路径和双向接口查询；
@@ -911,7 +935,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
