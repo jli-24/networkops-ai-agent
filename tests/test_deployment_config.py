@@ -35,9 +35,9 @@ class DeploymentSettingsTests(unittest.TestCase):
         project = tomllib.loads(
             (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         )
-        self.assertEqual(project["project"]["version"], "0.12.0")
-        self.assertEqual(network_agent_rag.__version__, "0.12.0")
-        self.assertEqual(importlib.metadata.version("networkops-ai-agent"), "0.12.0")
+        self.assertEqual(project["project"]["version"], "0.13.0")
+        self.assertEqual(network_agent_rag.__version__, "0.13.0")
+        self.assertEqual(importlib.metadata.version("networkops-ai-agent"), "0.13.0")
 
     def test_app_env_is_primary_and_environment_remains_compatible(self) -> None:
         with patch.dict(
@@ -303,7 +303,7 @@ class DeploymentFilesTests(unittest.TestCase):
         self.assertIn("python:3.11", dockerfile)
         self.assertIn("USER networkops", dockerfile)
         self.assertIn("HEALTHCHECK", dockerfile)
-        self.assertIn("networkops_ai_agent-0.12.0-py3-none-any.whl", dockerfile)
+        self.assertIn("networkops_ai_agent-0.13.0-py3-none-any.whl", dockerfile)
         self.assertNotIn("--reload", dockerfile)
         for service in (
             "nginx:",

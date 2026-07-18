@@ -122,7 +122,7 @@ class ComplianceReportTests(unittest.TestCase):
     def test_version_is_0_11_0(self) -> None:
         import network_agent_rag
 
-        self.assertEqual(network_agent_rag.__version__, "0.12.0")
+        self.assertEqual(network_agent_rag.__version__, "0.13.0")
 
 
 if __name__ == "__main__":

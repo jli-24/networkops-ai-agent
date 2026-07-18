@@ -2,7 +2,7 @@
 
 ## System Overview
 
-NetworkOps AI Agent v0.12.0 keeps three compatible orchestration generations:
+NetworkOps AI Agent v0.13.0 keeps three compatible orchestration generations:
 
 - v0.1.0 keeps the general quality-control workflow and the dedicated single-agent diagnosis workflow;
 - v0.2.0 adds a supervisor-led multi-agent workflow without replacing the v0.1 entry points.
@@ -16,6 +16,7 @@ NetworkOps AI Agent v0.12.0 keeps three compatible orchestration generations:
 - v0.10.0 adds an auth-owned identity lifecycle without changing workflow state or API contracts.
 - v0.11.0 adds read-only governance projections, deterministic risk scoring, and ephemeral compliance reports over existing Audit and Trace facts.
 - v0.12.0 adds a deterministic policy gate between RBAC authorization and execution side effects.
+- v0.13.0 adds an offline Evaluation Layer alongside the unchanged v0.4 Benchmark implementation.
 
 All workflows are dependency injected. The default FastAPI application does not create a model, vector store, or workflow automatically.
 
@@ -292,6 +293,32 @@ configuration requires `POLICY_ENGINE_ENABLED=true` and fails startup rather
 than silently falling back. Policy does not replace Authentication, RBAC,
 RiskCheck, Human Approval, Audit, or Governance, and Policy objects never enter
 State, Checkpoint, API responses, or SSE.
+
+## v0.13.0 Evaluation & Benchmark Layer
+
+The v2 Evaluation Layer is an offline-only pipeline:
+
+```text
+AgentEvaluationCase -> injected Observation callback -> pure scoring
+    -> EvaluationResult -> independent metrics -> in-memory BenchmarkReport
+```
+
+It extends the existing `evaluation` package without replacing the v0.4
+`BenchmarkCase`, `BenchmarkObservation`, `BenchmarkRunner`, result store, CLI,
+Dashboard, or HTTP API. Versioned JSONL cases combine input and expected facts;
+the loader validates one dataset version, unique case IDs, strict enums, and
+stable ordering.
+
+Scoring is deterministic and covers root cause, Top-1/Top-3, confidence
+alignment, retrieval context, repair and Policy decisions, approval, execution
+safety, tool usage, and linear-interpolated latency percentiles. Reports are
+returned as stable JSON or Markdown in memory, with a canonical SHA-256 report
+identifier. No report is written to the legacy result store.
+
+Evaluation measures Agent capability; Policy controls runtime behavior; and
+Governance projects recorded facts. Evaluation does not import or call an
+online Workflow, access State or Checkpoint, participate in runtime decisions,
+or use LLM-as-a-Judge.
 
 ## Existing v0.1.0 Workflows
 

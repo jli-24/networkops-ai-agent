@@ -12,14 +12,26 @@ import json
 from pydantic import ValidationError
 
 from network_agent_rag.evaluation.models import (
+    AgentEvaluationCase,
     BenchmarkCase,
     BenchmarkCaseResult,
     BenchmarkObservation,
+    BenchmarkReport,
     BenchmarkRunResult,
+    EvaluationObservation,
+    EvaluationResult,
+)
+from network_agent_rag.evaluation.report import build_benchmark_report
+from network_agent_rag.evaluation.scoring import (
+    failed_evaluation_result,
+    score_evaluation_case,
 )
 
 
 ObservationCallback = Callable[[BenchmarkCase], BenchmarkObservation | dict[str, object]]
+EvaluationObservationCallback = Callable[
+    [AgentEvaluationCase], EvaluationObservation | dict[str, object]
+]
 
 
 def load_benchmark_dataset(path: str | Path) -> list[BenchmarkCase]:
@@ -82,6 +94,50 @@ class BenchmarkRunner:
             finished_at=finished,
             cases=results,
             summary=_summary(results),
+        )
+
+
+class AgentEvaluationRunner:
+    """Run v2 evaluations using only an injected offline observation source."""
+
+    def __init__(
+        self,
+        observe: EvaluationObservationCallback,
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self.observe = observe
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
+
+    def run_case(self, case: AgentEvaluationCase) -> EvaluationResult:
+        try:
+            raw_observation = self.observe(case)
+        except Exception:
+            return failed_evaluation_result(case, "EVALUATION_SOURCE_FAILED")
+        try:
+            observation = EvaluationObservation.model_validate(raw_observation)
+        except (ValidationError, TypeError, ValueError):
+            return failed_evaluation_result(case, "INVALID_OBSERVATION")
+        return score_evaluation_case(case, observation)
+
+    def run_dataset(
+        self,
+        cases: Sequence[AgentEvaluationCase],
+        dataset_version: str,
+    ) -> BenchmarkReport:
+        items = tuple(cases)
+        if not items:
+            raise ValueError("evaluation dataset must contain at least one case")
+        version = _required(dataset_version, "dataset_version")
+        if any(case.dataset_version != version for case in items):
+            raise ValueError("dataset_version does not match evaluation cases")
+        if len({case.case_id for case in items}) != len(items):
+            raise ValueError("evaluation case_id values must be unique")
+        results = tuple(self.run_case(case) for case in sorted(items, key=lambda item: item.case_id))
+        return build_benchmark_report(
+            results,
+            dataset_version=version,
+            created_at=_aware(self.clock()),
         )
 
 
@@ -151,4 +207,10 @@ def _aware(value: datetime) -> datetime:
     return value
 
 
-__all__ = ["BenchmarkRunner", "ObservationCallback", "load_benchmark_dataset"]
+__all__ = [
+    "AgentEvaluationRunner",
+    "BenchmarkRunner",
+    "EvaluationObservationCallback",
+    "ObservationCallback",
+    "load_benchmark_dataset",
+]

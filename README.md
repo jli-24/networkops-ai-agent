@@ -14,8 +14,8 @@
 <img src="https://img.shields.io/badge/Python-3.11-blue?style=flat-square">
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
-<img src="https://img.shields.io/badge/Version-0.12.0-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-319%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Version-0.13.0-blueviolet?style=flat-square">
+<img src="https://img.shields.io/badge/Test-341%20passed-success?style=flat-square">
 
 </p>
 
@@ -179,6 +179,19 @@ v0.12.0 在 RBAC 与执行副作用之间增加独立、确定性的上下文策
 Policy Engine 不替代 Authentication、RBAC、RiskCheck 或 Human Approval。`PolicyContext` 与 `PolicyDecision` 只存在于节点运行期间，不进入 Workflow State、Checkpoint、API Response 或 SSE。未注入 Policy Engine 的旧工作流工厂保持兼容；生产部署要求显式启用 Policy-aware factory，禁止静默降级。
 
 
+### 📊 Evaluation & Benchmark Layer
+
+v0.13.0 在 v0.4 Offline Benchmark 旁新增独立的 v2 离线评测层：
+
+- `AgentEvaluationCase` 通过注入的 Observation callback 接收隔离运行结果或预录制事实；
+- 纯函数评分覆盖 RCA、Top-1/Top-3、置信度校准、RAG 上下文、修复、Policy、审批、执行安全、工具调用和延迟；
+- `EvaluationMetricsSnapshot` 独立聚合评测指标，不修改 Observability MetricsStore；
+- `EvaluationReportBuilder` 在内存生成稳定 JSON/Markdown，并以规范化内容的 SHA-256 生成 Report ID；
+- v0.4 的 Benchmark 模型、Runner、CLI、Dashboard 和 HTTP API 保持不变。
+
+Evaluation 衡量 Agent 能力，Policy 控制运行行为，Governance 记录已经发生的事实。Evaluation 不导入或调用线上 Workflow，不访问 State 或 Checkpoint，不参与线上执行决策，也不使用 LLM-as-a-Judge。
+
+
 ### 🧪 Engineering Quality
 
 面向工程化开发：
@@ -336,12 +349,13 @@ NetworkOps AI Agent includes automated tests for:
 - API interfaces
 - Tool calling
 - Audit-backed Agent execution TraceEvent
+- Offline Evaluation dataset, scoring, metrics, and report stability
 
 
 Current test status:
 
 ```text
-286 passed, 1 optional PostgreSQL integration test skipped
+341 passed, 1 optional PostgreSQL integration test skipped
 
 OK
 ```
@@ -504,6 +518,16 @@ Completed:
 - Audit and Governance projection without Policy objects entering persisted state
 
 
+### v0.13.0 ✅ Evaluation & Benchmark Layer
+
+Completed:
+
+- Strict versioned offline evaluation cases and observations
+- Pure deterministic scoring and independent metrics aggregation
+- Stable in-memory JSON and Markdown reports with canonical SHA-256 IDs
+- Full compatibility with the v0.4 Benchmark API, CLI, Dashboard, and result store
+
+
 ### Future 🚧 Network Digital Twin Evolution
 
 Planning:
@@ -561,6 +585,7 @@ Planning:
 - v0.4.0 Enterprise Observability：父子执行 Span、指标、事件时间线、离线 Benchmark 与增强 Streamlit Dashboard；
 - v0.11.0 Governance & Compliance Layer：只读 Security Event 投影、确定性风险评分、即时合规报告及三个固定追加式 Audit action；
 - v0.12.0 Agent Policy Engine：显式工具分类、确定性上下文规则、默认拒绝及现有审批流程复用；
+- v0.13.0 Evaluation & Benchmark Layer：版本化离线 Observation、纯函数评分、独立指标和稳定内存报告；
 - 带文本层的 PDF、Markdown、TXT 文档加载，标题层级与 CLI 命令块保留；
 - BGE-M3 Embedding、Chroma 集合重建与语义检索；
 - 基于 NetworkX 的设备、关系、最短路径和双向接口查询；
@@ -960,7 +985,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影，v0.12.0 增加确定性的 Agent Policy Engine。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影，v0.12.0 增加确定性的 Agent Policy Engine，v0.13.0 增加独立离线 Evaluation Layer。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
