@@ -1,13 +1,13 @@
 services:
-  nginx:
-    image: nginx:1.29.5-alpine3.23
+  network-agent-console:
+    build:
+      context: ./console
+      dockerfile: Dockerfile
     depends_on:
       network-agent-api:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${NETWORKOPS_GATEWAY_PORT:-8080}:80"
-    volumes:
-      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - "127.0.0.1:${NETWORKOPS_GATEWAY_PORT:-8080}:8080"
     restart: unless-stopped
 
   network-agent-api:
