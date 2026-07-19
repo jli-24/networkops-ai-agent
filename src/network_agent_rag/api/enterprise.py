@@ -35,6 +35,10 @@ from network_agent_rag.api.enterprise_schemas import (
     IncidentStatusResponse,
 )
 from network_agent_rag.api.benchmarks import benchmark_router
+from network_agent_rag.api.console import (
+    EvaluationReportProvider,
+    console_router,
+)
 from network_agent_rag.api.observability import (
     enterprise_metrics_router,
     metrics_router,
@@ -130,6 +134,7 @@ def create_enterprise_app(
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
     authentication_provider: AuthenticationProvider | None = None,
     user_context_provider: Callable[[Request], UserContext | None] | None = None,
+    evaluation_report_provider: EvaluationReportProvider | None = None,
 ) -> FastAPI:
     """Create an app with opt-in enterprise incident routes."""
 
@@ -150,6 +155,7 @@ def create_enterprise_app(
         else None
     )
     application.state.benchmark_store = benchmark_store
+    application.state.evaluation_report_provider = evaluation_report_provider
     application.state.enterprise_clock = clock or (lambda: datetime.now(timezone.utc))
     application.state.authentication_provider = authentication_provider
     application.state.user_context_provider = user_context_provider
@@ -165,6 +171,7 @@ def create_enterprise_app(
     application.include_router(observability_router, prefix=Settings().api_prefix)
     application.include_router(enterprise_metrics_router, prefix=Settings().api_prefix)
     application.include_router(benchmark_router, prefix=Settings().api_prefix)
+    application.include_router(console_router, prefix=Settings().api_prefix)
     application.include_router(metrics_router)
     return application
 
@@ -181,6 +188,7 @@ def create_sqlite_enterprise_app(
     clock: Callable[[], datetime] | None = None,
     authentication_provider: AuthenticationProvider | None = None,
     user_context_provider: Callable[[Request], UserContext | None] | None = None,
+    evaluation_report_provider: EvaluationReportProvider | None = None,
 ) -> FastAPI:
     """Create an app whose lifespan owns the async SQLite checkpointer."""
 
@@ -256,6 +264,7 @@ def create_sqlite_enterprise_app(
         lifespan=lifespan,
         authentication_provider=resolved_authentication,
         user_context_provider=user_context_provider,
+        evaluation_report_provider=evaluation_report_provider,
     )
 
 
@@ -277,6 +286,7 @@ def create_storage_enterprise_app(
     clock: Callable[[], datetime] | None = None,
     authentication_provider: AuthenticationProvider | None = None,
     user_context_provider: Callable[[Request], UserContext | None] | None = None,
+    evaluation_report_provider: EvaluationReportProvider | None = None,
 ) -> FastAPI:
     """Create an enterprise app with independently selected storage domains."""
 
@@ -400,6 +410,7 @@ def create_storage_enterprise_app(
         lifespan=lifespan,
         authentication_provider=resolved_authentication,
         user_context_provider=user_context_provider,
+        evaluation_report_provider=evaluation_report_provider,
     )
 
 
