@@ -306,7 +306,7 @@ class DeploymentFilesTests(unittest.TestCase):
         self.assertIn("networkops_ai_agent-0.13.0-py3-none-any.whl", dockerfile)
         self.assertNotIn("--reload", dockerfile)
         for service in (
-            "nginx:",
+            "network-agent-console:",
             "network-agent-api:",
             "postgres:",
             "redis:",
@@ -314,6 +314,13 @@ class DeploymentFilesTests(unittest.TestCase):
             "grafana:",
         ):
             self.assertIn(service, compose)
+        self.assertIn(
+            "  network-agent-console:\n"
+            "    build:\n"
+            "      context: ./console\n",
+            compose,
+        )
+        self.assertNotRegex(compose, r"(?m)^  nginx:\s*$")
         self.assertNotIn("POSTGRES_PASSWORD:-networkops", compose)
         self.assertNotIn("REDIS_PASSWORD:-networkops", compose)
 
