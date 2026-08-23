@@ -1,4 +1,4 @@
-"""EmbeddedOps HTTP API: unified task entrypoint and capability listing.
+"""EmbeddedOps HTTP API: unified task entrypoint.
 
 ``POST /embedded/tasks`` is the product entrypoint: submit a goal, get a
 task id, and drive the graph through its approval interrupt. The per-step
@@ -15,16 +15,18 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from network_agent_rag.agents.embedded.workflow import create_embedded_workflow
+from network_agent_rag.packs.embeddedops.agents.workflow import create_embedded_workflow
 from network_agent_rag.artifact import ArtifactStore, FileSystemArtifactStore
 from network_agent_rag.auth import Permission
 from network_agent_rag.auth.dependencies import require_permission
-from network_agent_rag.capability import CapabilityRegistry, CapabilityType
-from network_agent_rag.capability.defaults import register_default_capabilities
+from network_agent_rag.capability import CapabilityRegistry
+from network_agent_rag.packs import PackRegistry
+from network_agent_rag.packs.embeddedops.capabilities import bind_embeddedops_handlers
+from network_agent_rag.packs.embeddedops.manifest import register_embeddedops_pack
 from network_agent_rag.core.config import Settings
 from network_agent_rag.domain.task import InMemoryTaskStore, Task, TaskDomain, TaskStatus
 from network_agent_rag.domain.task.models import new_task_id
-from network_agent_rag.infrastructure.simulation import InProcessSimulatorBackend
+from network_agent_rag.packs.embeddedops.simulation import InProcessSimulatorBackend
 
 
 _require_embedded_generate = require_permission(Permission.EMBEDDED_GENERATE)
@@ -33,7 +35,12 @@ _require_embedded_simulate = require_permission(Permission.EMBEDDED_SIMULATE)
 
 
 class EmbeddedServices:
-    """Wired dependencies for the embedded API (single-process default)."""
+    """Wired dependencies for the embedded API (single-process default).
+
+    Capabilities flow through the PackRegistry pipeline (governance and
+    factory validation are fail-fast); handlers are bound afterwards by
+    the pack bootstrap. No asset is mounted outside the pipeline.
+    """
 
     def __init__(
         self,
@@ -46,13 +53,18 @@ class EmbeddedServices:
     ) -> None:
         self.settings = settings or Settings()
         self.task_store = task_store or InMemoryTaskStore()
-        self.capability_registry = capability_registry or register_default_capabilities(
-            CapabilityRegistry()
+        self.capability_registry = capability_registry or CapabilityRegistry()
+        self.backend = InProcessSimulatorBackend()
+        self.pack_registry = PackRegistry(
+            capability_registry=self.capability_registry
+        )
+        register_embeddedops_pack(self.pack_registry)
+        bind_embeddedops_handlers(
+            self.capability_registry, backend=self.backend
         )
         self.artifact_store = artifact_store or FileSystemArtifactStore(
             artifact_root or self.settings.artifact_root
         )
-        self.backend = InProcessSimulatorBackend()
         self.checkpointer = InMemorySaver()
         self._sequence = 0
 
@@ -118,18 +130,6 @@ class TaskDetailResponse(TaskResponse):
     artifacts: list[ArtifactResponse] = Field(default_factory=list)
     approval_request: dict[str, Any] | None = None
     firmware_filename: str | None = None
-
-
-class CapabilityResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    version: str
-    type: str
-    permission: str
-    backend: str
-    enabled: bool
-    metadata: dict[str, Any]
 
 
 def create_embedded_router(
@@ -294,39 +294,7 @@ def create_embedded_router(
     return router
 
 
-def create_capabilities_router(
-    services: EmbeddedServices | None = None,
-) -> APIRouter:
-    services = services or EmbeddedServices()
-    router = APIRouter(prefix="/capabilities", tags=["capabilities"])
-
-    @router.get("", response_model=list[CapabilityResponse])
-    def list_capabilities(
-        _: Annotated[None, Depends(_require_embedded_read)],
-        type: CapabilityType | None = None,
-        permission: Permission | None = None,
-    ) -> list[CapabilityResponse]:
-        capabilities = services.capability_registry.list(
-            type=type, permission=permission, enabled=True
-        )
-        return [
-            CapabilityResponse(
-                name=capability.name,
-                version=capability.version,
-                type=capability.type.value,
-                permission=capability.permission.value,
-                backend=capability.backend,
-                enabled=capability.enabled,
-                metadata=capability.metadata,
-            )
-            for capability in capabilities
-        ]
-
-    return router
-
-
 __all__ = [
     "EmbeddedServices",
-    "create_capabilities_router",
     "create_embedded_router",
 ]

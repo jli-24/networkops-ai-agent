@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from langchain_core.documents import Document
 
-from network_agent_rag.domain.embedded import (
+from network_agent_rag.packs.embeddedops.domain import (
     Framework,
     HardwareDesign,
     MCU_CATALOG,

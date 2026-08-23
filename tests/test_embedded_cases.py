@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from network_agent_rag.evaluation.embedded_cases import (
+from network_agent_rag.packs.embeddedops.evaluation import (
     EmbeddedEvaluationCase,
     load_embedded_cases,
 )

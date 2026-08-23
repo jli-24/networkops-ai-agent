@@ -8,17 +8,19 @@ from datetime import datetime, timezone
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
-from network_agent_rag.agents.embedded.workflow import create_embedded_workflow
+from network_agent_rag.packs.embeddedops.agents.workflow import create_embedded_workflow
 from network_agent_rag.audit import SQLiteAuditLog
 from network_agent_rag.capability import CapabilityRegistry
-from network_agent_rag.capability.defaults import register_default_capabilities
-from network_agent_rag.domain.embedded import (
+from network_agent_rag.packs import PackRegistry
+from network_agent_rag.packs.embeddedops.capabilities import bind_embeddedops_handlers
+from network_agent_rag.packs.embeddedops.manifest import EMBEDDEDOPS_PACK
+from network_agent_rag.packs.embeddedops.domain import (
     DebugReport,
     FirmwareArtifact,
     Framework,
 )
-from network_agent_rag.infrastructure.simulation import InProcessSimulatorBackend
-from network_agent_rag.domain.embedded.models import ValidationState
+from network_agent_rag.packs.embeddedops.simulation import InProcessSimulatorBackend
+from network_agent_rag.packs.embeddedops.domain.models import ValidationState
 
 
 GOOD_SOURCE = "/* fw */\nvoid app_main(void) { sample_and_report(); }\n"
@@ -31,7 +33,9 @@ def _build_graph(
     diagnose=None,
     audit_log=None,
 ):
-    registry = register_default_capabilities(CapabilityRegistry())
+    registry = CapabilityRegistry()
+    PackRegistry(capability_registry=registry).register(EMBEDDEDOPS_PACK)
+    bind_embeddedops_handlers(registry)
     return create_embedded_workflow(
         backend=InProcessSimulatorBackend(),
         capability_registry=registry,

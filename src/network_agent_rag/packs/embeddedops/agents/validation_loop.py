@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from network_agent_rag.artifact import ArtifactStore, ArtifactType
-from network_agent_rag.domain.embedded import (
+from network_agent_rag.packs.embeddedops.domain import (
     DebugReport,
     FirmwareArtifact,
     HardwareDesign,
@@ -27,7 +27,7 @@ from network_agent_rag.domain.embedded import (
     VerificationErrorCategory,
     VerificationReport,
 )
-from network_agent_rag.infrastructure.simulation import (
+from network_agent_rag.packs.embeddedops.simulation import (
     CompileResult,
     SimulatorBackend,
 )
@@ -240,7 +240,7 @@ class ValidationLoop:
         None firmware means the loop terminated in FAILED.
         """
 
-        from network_agent_rag.agents.embedded.debug_agent import run_debug_agent
+        from network_agent_rag.packs.embeddedops.agents.debug_agent import run_debug_agent
 
         self._advance(machine, ValidationState.DEBUGGING)
         update = run_debug_agent(

@@ -41,11 +41,16 @@ class EmbeddedEvaluationCase(BaseModel):
         return value.strip()
 
 
+CASES_DIRECTORY = Path(__file__).resolve().parent / "evaluation_cases"
+
+
 def load_embedded_cases(
-    directory: str | Path = "evaluation/embedded_cases",
+    directory: str | Path | None = None,
     expected_version: str | None = None,
 ) -> tuple[EmbeddedEvaluationCase, ...]:
     """Load every ``*.json`` case in ``directory`` with strict validation."""
+
+    directory = directory or CASES_DIRECTORY
 
     root = Path(directory)
     if not root.is_dir():
@@ -72,4 +77,9 @@ def load_embedded_cases(
     return tuple(sorted(cases, key=lambda item: item.case_id))
 
 
-__all__ = ["EmbeddedCaseCategory", "EmbeddedEvaluationCase", "load_embedded_cases"]
+__all__ = [
+    "CASES_DIRECTORY",
+    "EmbeddedCaseCategory",
+    "EmbeddedEvaluationCase",
+    "load_embedded_cases",
+]

@@ -9,7 +9,7 @@ from pathlib import Path
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
-from network_agent_rag.rag.embedded_corpus import (
+from network_agent_rag.packs.embeddedops.knowledge import (
     build_embedded_vector_store,
     load_embedded_documents,
 )

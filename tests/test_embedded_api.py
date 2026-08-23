@@ -9,9 +9,9 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from network_agent_rag.api.embedded import (
+from network_agent_rag.api.capabilities import create_capabilities_router
+from network_agent_rag.packs.embeddedops.api import (
     EmbeddedServices,
-    create_capabilities_router,
     create_embedded_router,
 )
 
@@ -21,7 +21,9 @@ def _client() -> TestClient:
     services = EmbeddedServices(artifact_root=str(Path(tmp.name) / "artifacts"))
     app = FastAPI()
     app.include_router(create_embedded_router(services), prefix="/api/v1")
-    app.include_router(create_capabilities_router(services), prefix="/api/v1")
+    app.include_router(
+        create_capabilities_router(services.capability_registry), prefix="/api/v1"
+    )
     client = TestClient(app)
     client._tmp = tmp  # type: ignore[attr-defined]
     return client

@@ -6,18 +6,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from network_agent_rag.agents.embedded.debug_agent import run_debug_agent
-from network_agent_rag.agents.embedded.firmware_agent import run_firmware_agent
-from network_agent_rag.agents.embedded.hardware_agent import run_hardware_agent
-from network_agent_rag.agents.embedded.validation_loop import (
+from network_agent_rag.packs.embeddedops.agents.debug_agent import run_debug_agent
+from network_agent_rag.packs.embeddedops.agents.firmware_agent import run_firmware_agent
+from network_agent_rag.packs.embeddedops.agents.hardware_agent import run_hardware_agent
+from network_agent_rag.packs.embeddedops.agents.validation_loop import (
     InvalidStateTransition,
     ValidationLoop,
     ValidationStateMachine,
 )
 from network_agent_rag.artifact import FileSystemArtifactStore
 from network_agent_rag.capability import CapabilityRegistry
-from network_agent_rag.capability.defaults import register_default_capabilities
-from network_agent_rag.domain.embedded import (
+from network_agent_rag.packs.embeddedops.domain import (
     DebugReport,
     FirmwareArtifact,
     Framework,
@@ -31,9 +30,9 @@ from network_agent_rag.domain.embedded import (
     VerificationErrorCategory,
     select_mcu,
 )
-from network_agent_rag.infrastructure.simulation import InProcessSimulatorBackend
-from network_agent_rag.infrastructure.simulation.renode import create_renode_backend
-from network_agent_rag.infrastructure.simulation.wokwi import create_wokwi_backend
+from network_agent_rag.packs.embeddedops.simulation import InProcessSimulatorBackend
+from network_agent_rag.packs.embeddedops.simulation.renode import create_renode_backend
+from network_agent_rag.packs.embeddedops.simulation.wokwi import create_wokwi_backend
 
 
 def _design(goal: str = "设计一个ESP32温湿度采集节点") -> HardwareDesign:
@@ -344,9 +343,25 @@ class ValidationLoopTests(unittest.TestCase):
             self.assertTrue(set(report.artifact_ids))
 
 
-class CapabilityDefaultsTests(unittest.TestCase):
+class EmbeddedPackBootstrapTests(unittest.TestCase):
+    """Capabilities register through the pack pipeline; handlers bind after."""
+
+    @staticmethod
+    def _bootstrapped() -> CapabilityRegistry:
+        from network_agent_rag.packs import PackRegistry
+        from network_agent_rag.packs.embeddedops.capabilities import (
+            bind_embeddedops_handlers,
+        )
+        from network_agent_rag.packs.embeddedops.manifest import EMBEDDEDOPS_PACK
+
+        registry = CapabilityRegistry()
+        pack_registry = PackRegistry(capability_registry=registry)
+        pack_registry.register(EMBEDDEDOPS_PACK)
+        bind_embeddedops_handlers(registry)
+        return registry
+
     def test_registered_capabilities_resolve_and_execute(self) -> None:
-        registry = register_default_capabilities(CapabilityRegistry())
+        registry = self._bootstrapped()
         compile_handler = registry.handler("esp32_compile", version="2.0")
         result = compile_handler(_GOOD_SOURCE)
         self.assertTrue(result.success)
@@ -360,11 +375,20 @@ class CapabilityDefaultsTests(unittest.TestCase):
         spec = lookup(McuRequirements(needs_wifi=True))
         self.assertEqual(spec.family, "ESP32")
 
+    def test_handler_rebinding_is_rejected(self) -> None:
+        from network_agent_rag.packs.embeddedops.capabilities import (
+            bind_embeddedops_handlers,
+        )
+
+        registry = self._bootstrapped()
+        with self.assertRaises(ValueError):
+            bind_embeddedops_handlers(registry)
+
     def test_capability_metadata_distinguishes_frameworks(self) -> None:
         from network_agent_rag.capability import CapabilityQuery, CapabilityResolver
         from network_agent_rag.capability import CapabilityType
 
-        registry = register_default_capabilities(CapabilityRegistry())
+        registry = self._bootstrapped()
         resolver = CapabilityResolver(registry)
         idf = resolver.resolve(
             "compile esp32 firmware",

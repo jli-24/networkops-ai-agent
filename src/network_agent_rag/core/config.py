@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     audit_db_path: str = "data/enterprise/audit.sqlite3"
     observability_db_path: str = "data/enterprise/observability.sqlite3"
     benchmark_results_path: str = "data/evaluations"
-    embedded_knowledge_dir: str = "knowledge/embedded"
     embedded_collection_name: str = "embedded_knowledge"
     artifact_root: str = "data/artifacts"
     storage_backend: Literal["sqlite", "postgres"] = "sqlite"

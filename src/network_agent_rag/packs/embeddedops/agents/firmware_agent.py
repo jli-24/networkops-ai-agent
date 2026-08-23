@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
 
-from network_agent_rag.domain.embedded import FirmwareArtifact, Framework, HardwareDesign
+from network_agent_rag.packs.embeddedops.domain import FirmwareArtifact, Framework, HardwareDesign
 
 GenerateCallback = Callable[[HardwareDesign], FirmwareArtifact]
 

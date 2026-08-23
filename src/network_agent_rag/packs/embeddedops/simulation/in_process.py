@@ -13,7 +13,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from network_agent_rag.artifact import compute_sha256
-from network_agent_rag.domain.embedded.models import (
+from network_agent_rag.packs.embeddedops.domain.models import (
     Framework,
     HardwareDesign,
     SimulationResult,
@@ -21,7 +21,7 @@ from network_agent_rag.domain.embedded.models import (
     TestCaseResult,
     VerificationErrorCategory,
 )
-from network_agent_rag.infrastructure.simulation.backend import (
+from network_agent_rag.packs.embeddedops.simulation.backend import (
     CompileResult,
     VirtualDevice,
 )

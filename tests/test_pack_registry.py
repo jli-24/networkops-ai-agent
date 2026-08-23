@@ -42,7 +42,7 @@ from network_agent_rag.policy.models import (
 from network_agent_rag.policy.registry import PolicyRegistry
 
 
-_FACTORY = "network_agent_rag.capability.defaults:register_default_capabilities"
+_FACTORY = "network_agent_rag.packs.embeddedops.manifest:register_embeddedops_pack"
 
 
 def _capability(

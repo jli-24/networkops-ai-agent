@@ -24,21 +24,21 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
-from network_agent_rag.agents.embedded.debug_agent import run_debug_agent
-from network_agent_rag.agents.embedded.firmware_agent import (
+from network_agent_rag.packs.embeddedops.agents.debug_agent import run_debug_agent
+from network_agent_rag.packs.embeddedops.agents.firmware_agent import (
     GenerateCallback,
     run_firmware_agent,
 )
-from network_agent_rag.agents.embedded.hardware_agent import (
+from network_agent_rag.packs.embeddedops.agents.hardware_agent import (
     DesignCallback,
     RetrieveCallback,
     run_hardware_agent,
 )
-from network_agent_rag.agents.embedded.state import EmbeddedInput, EmbeddedState
+from network_agent_rag.packs.embeddedops.agents.state import EmbeddedInput, EmbeddedState
 from network_agent_rag.artifact import ArtifactStore, ArtifactType
 from network_agent_rag.audit import AuditEventType
 from network_agent_rag.capability import CapabilityRegistry, CapabilityResolver
-from network_agent_rag.domain.embedded import (
+from network_agent_rag.packs.embeddedops.domain import (
     ApprovalAction,
     ApprovalRequest,
     FirmwareArtifact,
@@ -46,7 +46,7 @@ from network_agent_rag.domain.embedded import (
     SimulationTestCase,
     ValidationState,
 )
-from network_agent_rag.infrastructure.simulation import SimulatorBackend
+from network_agent_rag.packs.embeddedops.simulation import SimulatorBackend
 from network_agent_rag.policy import PolicyRiskLevel
 from network_agent_rag.storage.base import AuditStore
 
@@ -197,7 +197,7 @@ def create_embedded_workflow(
             return _unavailable("esp32_compile")
         design = HardwareDesign.model_validate(state["hardware_design"])
         firmware = FirmwareArtifact.model_validate(state["firmware"])
-        from network_agent_rag.agents.embedded.validation_loop import (
+        from network_agent_rag.packs.embeddedops.agents.validation_loop import (
             run_verification_pass,
         )
 

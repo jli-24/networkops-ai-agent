@@ -1,4 +1,4 @@
-"""Embedded-domain knowledge corpus loading and ingestion."""
+"""EmbeddedOps knowledge corpus loading and ingestion (pack-owned corpus)."""
 
 from __future__ import annotations
 
@@ -12,16 +12,15 @@ from network_agent_rag.core.config import Settings
 from network_agent_rag.rag.documents import load_documents
 from network_agent_rag.rag.vector_store import create_vector_store
 
+CORPUS_DIRECTORY = Path(__file__).resolve().parent / "knowledge_corpus"
+
 
 def load_embedded_documents(
     directory: str | Path | None = None,
-    *,
-    settings: Settings | None = None,
 ) -> list[Document]:
-    """Load chunked documents from the embedded knowledge directory."""
+    """Load chunked documents from the pack-owned knowledge corpus."""
 
-    settings = settings or Settings()
-    source = Path(directory) if directory else Path(settings.embedded_knowledge_dir)
+    source = Path(directory) if directory else CORPUS_DIRECTORY
     if not source.exists():
         raise FileNotFoundError(f"embedded knowledge directory not found: {source}")
     return load_documents(source)
@@ -36,7 +35,7 @@ def build_embedded_vector_store(
     """Rebuild the persisted embedded-knowledge collection."""
 
     settings = settings or Settings()
-    documents = load_embedded_documents(settings=settings)
+    documents = load_embedded_documents()
     if not documents:
         raise ValueError("embedded knowledge directory contains no documents")
     return create_vector_store(
@@ -47,4 +46,8 @@ def build_embedded_vector_store(
     )
 
 
-__all__ = ["build_embedded_vector_store", "load_embedded_documents"]
+__all__ = [
+    "CORPUS_DIRECTORY",
+    "build_embedded_vector_store",
+    "load_embedded_documents",
+]

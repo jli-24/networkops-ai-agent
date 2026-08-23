@@ -20,7 +20,7 @@ class PackageStructureTests(unittest.TestCase):
             "api",
             "core",
             "domain",
-            "infrastructure",
+            "packs",
             "rag",
         )
 

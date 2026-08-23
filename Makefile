@@ -15,4 +15,4 @@ demo:
 	$(PYTHON) -m demo
 
 embedded-demo:
-	$(PYTHON) -m network_agent_rag.api.embedded_check || $(PYTHON) -c "from network_agent_rag.api.embedded import EmbeddedServices; s=EmbeddedServices(artifact_root='data/artifacts-demo'); print('EmbeddedOps services ready:', s.capability_registry.list())"
+	$(PYTHON) -c "from network_agent_rag.packs.embeddedops.api import EmbeddedServices; s=EmbeddedServices(artifact_root='data/artifacts-demo'); print('EmbeddedOps pack ready:', [c.key for c in s.capability_registry.list()])"

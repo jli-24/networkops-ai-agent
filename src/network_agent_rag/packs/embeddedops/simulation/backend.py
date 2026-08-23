@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from network_agent_rag.domain.embedded.models import (
+from network_agent_rag.packs.embeddedops.domain.models import (
     Framework,
     HardwareDesign,
     SimulationResult,

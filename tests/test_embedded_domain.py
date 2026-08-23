@@ -11,7 +11,7 @@ from network_agent_rag.artifact import (
     FileSystemArtifactStore,
     compute_sha256,
 )
-from network_agent_rag.domain.embedded import (
+from network_agent_rag.packs.embeddedops.domain import (
     ApprovalAction,
     ApprovalRequest,
     Framework,

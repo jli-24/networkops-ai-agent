@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
 
-from network_agent_rag.domain.embedded import (
+from network_agent_rag.packs.embeddedops.domain import (
     DebugReport,
     FirmwareArtifact,
     VerificationErrorCategory,

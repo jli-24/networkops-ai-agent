@@ -1146,13 +1146,13 @@ Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分�
 
 - **Capability Registry**（`src/network_agent_rag/capability/`）：版本化能力目录（`esp32_compile@1.0` Arduino / `@2.0` ESP-IDF 共存），`backend` 字符串引用解耦执行体，`metadata` 支持按框架/MCU 过滤；Agent 节点执行前 `resolve()`，能力缺失走显式 `CAPABILITY_UNAVAILABLE` 分支；
 - **Embedded Copilot**：Hardware Agent（目标 → `hardware_design.json`，含 MCU 选型目录与 BOM）、Firmware Agent（生成 C 源码）、Debug Agent（编译错误/仿真日志 → Root Cause Analysis），全部依赖注入回调，无 LLM 也有确定性回退；
-- **虚拟硬件实验室**（`src/network_agent_rag/infrastructure/simulation/`）：`SimulatorBackend` 协议 + 确定性 `in_process` 仿真器（编译、虚拟设备、串口日志、测试断言）；Wokwi/Renode 留适配器占位；
+- **虚拟硬件实验室**（v0.16 起位于 `src/network_agent_rag/packs/embeddedops/simulation/`）：`SimulatorBackend` 协议 + 确定性 `in_process` 仿真器（编译、虚拟设备、串口日志、测试断言）；Wokwi/Renode 留适配器占位；
 - **自动验证闭环**（显式状态机）：`CREATED → GENERATED → COMPILE_RUNNING → SIMULATION_RUNNING → (FAILED → DEBUGGING → RETRYING) → PASSED/FAILED`；编译错误与仿真断言失败消耗修复重试预算（默认 3 轮），基础设施错误不消耗预算直接终止；
 - **审批与产物**：固件生成后、仿真之前的 human-in-the-loop `interrupt` 审批（`ApprovalRequest` 含 `execution_plan` 步骤清单）；`ArtifactStore` 按 task_id 组织产物（`hardware_design.json`、`main.c`、`compile.attempt*.log`、`report.json`），全部带 SHA-256 防篡改哈希，为 OTA 校验预留；
 - **统一 Task 模型**（`src/network_agent_rag/domain/task/`）：`POST /api/v1/embedded/tasks` 产品入口（goal → task_id → 审批 → 验证结果），Network 与 Embedded 共享 Runtime；
-- **嵌入式 RAG**：`knowledge/embedded/` 语料（MCU 选型、SPI/I2C 故障案例、FreeRTOS 设计、历史 Bug），`search_collections()` 支持跨 embedded/network 知识库检索与去重合并（覆盖 ESP32 Wi-Fi 这类跨域故障）；
+- **嵌入式 RAG**：pack 内语料（`src/network_agent_rag/packs/embeddedops/knowledge_corpus/`，v0.16 起随 pack 走）（MCU 选型、SPI/I2C 故障案例、FreeRTOS 设计、历史 Bug），`search_collections()` 支持跨 embedded/network 知识库检索与去重合并（覆盖 ESP32 Wi-Fi 这类跨域故障）；
 - **权限**：`EMBEDDED_READ` / `EMBEDDED_GENERATE` / `EMBEDDED_SIMULATE` 三权限显式映射到 `EmbeddedEngineer` 角色，Policy 无隐式通道；
-- **评测集**：`evaluation/embedded_cases/`（SPI/Wi-Fi/FreeRTOS 死锁/I2C 冲突/OTA 回滚五类案例），`load_embedded_cases()` 严格校验；
+- **评测集**：随 pack 走（`src/network_agent_rag/packs/embeddedops/evaluation_cases/`，SPI/Wi-Fi/FreeRTOS 死锁/I2C 冲突/OTA 回滚五类案例），`load_embedded_cases()` 严格校验；
 - **Console**：新增 Embedded Lab 页面——目标提交、任务列表、状态机进度、审批卡片（执行计划 + 批准/拒绝）、产物哈希表与能力目录。
 
 限制：仿真器为确定性内置实现（真实 Wokwi/Renode 适配器为 Planned）；LLM 生成与诊断依赖注入点已留好但默认使用确定性回退；嵌入式任务存储为进程内 TaskStore。

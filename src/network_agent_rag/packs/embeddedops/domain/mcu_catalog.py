@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from network_agent_rag.domain.embedded.models import McuSpec, PeripheralBus
+from network_agent_rag.packs.embeddedops.domain.models import McuSpec, PeripheralBus
 
 
 _MCU_CATALOG: tuple[McuSpec, ...] = (

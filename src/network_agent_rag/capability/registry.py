@@ -61,6 +61,24 @@ class CapabilityRegistry:
             raise KeyError(f"capability has no handler: {capability.key}")
         return handler
 
+    def bind_handler(
+        self,
+        name: str,
+        handler: Handler,
+        *,
+        version: str | None = None,
+    ) -> None:
+        """Attach an execution handler to an already-registered capability.
+
+        Pack registration declares capabilities through the pipeline; the
+        pack bootstrap then binds backend-specific handlers to them.
+        """
+
+        capability = self.get(name, version=version)
+        if capability.key in self._handlers:
+            raise ValueError(f"handler already bound: {capability.key}")
+        self._handlers[capability.key] = handler
+
     def list(
         self,
         *,

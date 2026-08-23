@@ -1,6 +1,6 @@
 """Embedded device domain models."""
 
-from network_agent_rag.domain.embedded.models import (
+from network_agent_rag.packs.embeddedops.domain.models import (
     BomItem,
     DebugReport,
     FirmwareArtifact,
@@ -16,12 +16,12 @@ from network_agent_rag.domain.embedded.models import (
     VerificationErrorCategory,
     VerificationReport,
 )
-from network_agent_rag.domain.embedded.mcu_catalog import (
+from network_agent_rag.packs.embeddedops.domain.mcu_catalog import (
     MCU_CATALOG,
     McuRequirements,
     select_mcu,
 )
-from network_agent_rag.domain.embedded.approval import (
+from network_agent_rag.packs.embeddedops.domain.approval import (
     ApprovalAction,
     ApprovalRequest,
 )
