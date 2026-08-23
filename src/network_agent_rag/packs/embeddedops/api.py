@@ -50,6 +50,8 @@ class EmbeddedServices:
         artifact_store: ArtifactStore | None = None,
         artifact_root: str | None = None,
         settings: Settings | None = None,
+        knowledge_persist_directory: str | None = None,
+        knowledge_embeddings=None,
     ) -> None:
         self.settings = settings or Settings()
         self.task_store = task_store or InMemoryTaskStore()
@@ -58,7 +60,11 @@ class EmbeddedServices:
         self.pack_registry = PackRegistry(
             capability_registry=self.capability_registry
         )
-        register_embeddedops_pack(self.pack_registry)
+        register_embeddedops_pack(
+            self.pack_registry,
+            knowledge_persist_directory=knowledge_persist_directory,
+            knowledge_embeddings=knowledge_embeddings,
+        )
         bind_embeddedops_handlers(
             self.capability_registry, backend=self.backend
         )

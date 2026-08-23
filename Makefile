@@ -1,7 +1,7 @@
 PYTHON ?= python3
 NPM ?= npm
 
-.PHONY: install test demo embedded-demo
+.PHONY: install test demo embedded-demo verify-fresh
 
 install:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -16,3 +16,6 @@ demo:
 
 embedded-demo:
 	$(PYTHON) -c "from network_agent_rag.packs.embeddedops.api import EmbeddedServices; s=EmbeddedServices(artifact_root='data/artifacts-demo'); print('EmbeddedOps pack ready:', [c.key for c in s.capability_registry.list()])"
+
+verify-fresh:
+	$(PYTHON) scripts/verify_fresh.py

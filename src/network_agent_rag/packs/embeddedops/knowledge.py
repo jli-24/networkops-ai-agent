@@ -46,8 +46,55 @@ def build_embedded_vector_store(
     )
 
 
+def initialize_collection(
+    *,
+    collection_name: str,
+    corpus_directory: str | Path,
+    persist_directory: str | Path,
+    embeddings: Embeddings | None = None,
+) -> str:
+    """Initialize a knowledge collection from a pack corpus if absent.
+
+    Returns ``"built"`` or ``"skipped"`` (collection already non-empty);
+    any failure raises -- registration is fail-loud, never silently
+    degraded (charter iron law 25: executable evidence, no audit-only
+    conclusions).
+    """
+
+    if not collection_name.strip():
+        raise ValueError("collection_name must not be empty")
+    directory = Path(persist_directory).expanduser().resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    probe = Chroma(
+        collection_name=collection_name,
+        embedding_function=embeddings,
+        persist_directory=str(directory),
+    )
+    try:
+        existing = probe.get()
+        if existing and existing.get("ids"):
+            return "skipped"
+    finally:
+        probe._client.close()
+    corpus_path = Path(corpus_directory)
+    if not corpus_path.is_dir():
+        raise FileNotFoundError(f"knowledge corpus not found: {corpus_path}")
+    documents = load_documents(corpus_path)
+    if not documents:
+        raise ValueError(f"knowledge corpus contains no documents: {corpus_path}")
+    store = create_vector_store(
+        documents,
+        persist_directory=directory,
+        collection_name=collection_name,
+        embeddings=embeddings,
+    )
+    store._client.close()
+    return "built"
+
+
 __all__ = [
     "CORPUS_DIRECTORY",
     "build_embedded_vector_store",
+    "initialize_collection",
     "load_embedded_documents",
 ]

@@ -76,10 +76,36 @@ EMBEDDEDOPS_PACK = DomainPackSpec(
 )
 
 
-def register_embeddedops_pack(registry: "network_agent_rag.packs.PackRegistry") -> DomainPackSpec:
-    """Register the embeddedops pack through the full pipeline (fail-fast)."""
+def register_embeddedops_pack(
+    registry: "network_agent_rag.packs.PackRegistry",
+    *,
+    knowledge_persist_directory: str | None = None,
+    knowledge_embeddings=None,
+) -> DomainPackSpec:
+    """Register the embeddedops pack through the full pipeline (fail-fast).
+
+    When ``knowledge_persist_directory`` is provided, each declared
+    knowledge collection is initialized at registration time (skip when
+    already present, build from the pack corpus when absent, fail loudly
+    on error). Without it the knowledge step is a no-op so unit tests
+    stay offline; deployment assembly passes the production directory.
+    """
 
     registry.register(EMBEDDEDOPS_PACK)
+    if knowledge_persist_directory is not None:
+        from pathlib import Path as _Path
+
+        from network_agent_rag.packs.embeddedops.knowledge import (
+            initialize_collection,
+        )
+
+        for collection in EMBEDDEDOPS_PACK.knowledge_collections:
+            initialize_collection(
+                collection_name=collection.name,
+                corpus_directory=_Path(collection.directory),
+                persist_directory=knowledge_persist_directory,
+                embeddings=knowledge_embeddings,
+            )
     return EMBEDDEDOPS_PACK
 
 
