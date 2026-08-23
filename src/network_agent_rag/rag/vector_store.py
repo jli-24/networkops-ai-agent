@@ -65,3 +65,41 @@ def search(
     if k <= 0:
         raise ValueError("k must be greater than zero")
     return vector_store.similarity_search_with_relevance_scores(query, k=k)
+
+
+def search_collections(
+    query: str,
+    vector_stores: Sequence[Chroma],
+    *,
+    k: int = 4,
+) -> list[tuple[Document, float]]:
+    """Search multiple collections (e.g. embedded + network) and merge.
+
+    Cross-domain questions like an ESP32 Wi-Fi failure need both the embedded
+    knowledge base and the network knowledge base. Results are merged,
+    de-duplicated by document content and source, and truncated to ``k`` by
+    relevance score.
+    """
+
+    if not query.strip():
+        raise ValueError("query must not be empty")
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+    stores = list(vector_stores)
+    if not stores:
+        raise ValueError("vector_stores must not be empty")
+
+    merged: dict[tuple[str, str], tuple[Document, float]] = {}
+    for store in stores:
+        for document, score in store.similarity_search_with_relevance_scores(
+            query, k=k
+        ):
+            dedupe_key = (
+                document.page_content,
+                str(document.metadata.get("source", "")),
+            )
+            existing = merged.get(dedupe_key)
+            if existing is None or score > existing[1]:
+                merged[dedupe_key] = (document, score)
+    ranked = sorted(merged.values(), key=lambda item: item[1], reverse=True)
+    return ranked[:k]

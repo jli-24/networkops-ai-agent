@@ -23,6 +23,7 @@ class RBACModelTests(unittest.TestCase):
             {
                 ("OPERATOR", "Operator"),
                 ("ENGINEER", "Engineer"),
+                ("EMBEDDED_ENGINEER", "EmbeddedEngineer"),
                 ("ADMIN", "Admin"),
             },
         )
@@ -35,6 +36,9 @@ class RBACModelTests(unittest.TestCase):
                 ("EXECUTE_REPAIR", "EXECUTE_REPAIR"),
                 ("APPROVE_REPAIR", "APPROVE_REPAIR"),
                 ("MANAGE_SYSTEM", "MANAGE_SYSTEM"),
+                ("EMBEDDED_READ", "EMBEDDED_READ"),
+                ("EMBEDDED_GENERATE", "EMBEDDED_GENERATE"),
+                ("EMBEDDED_SIMULATE", "EMBEDDED_SIMULATE"),
             },
         )
 
@@ -97,6 +101,15 @@ class RBACPermissionTests(unittest.TestCase):
                     Permission.EXECUTE_REPAIR,
                 }
             ),
+            Role.EMBEDDED_ENGINEER: frozenset(
+                {
+                    Permission.VIEW_INCIDENT,
+                    Permission.VIEW_TRACE,
+                    Permission.EMBEDDED_READ,
+                    Permission.EMBEDDED_GENERATE,
+                    Permission.EMBEDDED_SIMULATE,
+                }
+            ),
             Role.ADMIN: frozenset(
                 {
                     Permission.VIEW_INCIDENT,
@@ -129,7 +142,7 @@ class RBACPermissionTests(unittest.TestCase):
         user = User(
             user_id="user-1",
             username="alice",
-            roles=(Role.ENGINEER, Role.ADMIN),
+            roles=(Role.ENGINEER, Role.EMBEDDED_ENGINEER, Role.ADMIN),
         )
 
         permissions = permissions_for(user)
@@ -150,7 +163,7 @@ class RBACPermissionTests(unittest.TestCase):
         self.assertFalse(has_permission(user, "VIEW_INCIDENT"))  # type: ignore[arg-type]
 
     def test_package_version_is_0_5_1_release_candidate_1(self) -> None:
-        self.assertEqual(network_agent_rag.__version__, "0.13.0")
+        self.assertEqual(network_agent_rag.__version__, "0.15.0")
 
 
 if __name__ == "__main__":

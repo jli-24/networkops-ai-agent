@@ -15,7 +15,7 @@
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
 <img src="https://img.shields.io/badge/Version-0.13.0-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-341%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Test-446%20passed-success?style=flat-square">
 
 </p>
 
@@ -212,6 +212,81 @@ Evaluation 衡量 Agent 能力，Policy 控制运行行为，Governance 记录�
 - 高风险操作通过 LangGraph interrupt 暂停
 - 审批仅对摘要匹配且未过期的结构化动作生效
 
+## Demo Showcase
+
+### Architecture Flow
+
+```mermaid
+flowchart LR
+    Fault["Fault Injection"] --> Twin["Digital Twin"]
+    Twin --> Diagnosis["Agent Diagnosis"]
+    Diagnosis --> Retrieval["RAG Retrieval"]
+    Retrieval --> RCA["RCA"]
+    RCA --> Plan["Repair Plan"]
+    Plan --> Approval["Human Approval"]
+    Approval --> Execution["Execution"]
+    Execution --> Verification["Verification"]
+    Verification --> Audit["Audit"]
+```
+
+### Running the Demo
+
+The unified launcher reuses healthy services on the expected ports, starts only
+missing services, runs the deterministic fault simulation, and keeps the local
+API and Console in the foreground until `Ctrl+C`:
+
+```bash
+python -m demo
+```
+
+Alternative entry points:
+
+```bash
+make demo
+scripts/demo.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+scripts/demo.ps1
+```
+
+Requirements are Python 3.11, Node.js 22, installed Python/Console dependencies,
+and the existing Enterprise `.env` configuration. In particular,
+`JWT_SECRET_KEY` must already be configured. The launcher defaults to the local
+`demo.networkops_local_factory:create_workflow` adapter when no workflow factory
+is configured; an explicitly configured custom factory remains supported.
+The launcher does not generate, save, or print a JWT. Enter an operator-issued
+JWT manually in the Console; the React application keeps it in memory only.
+
+To run only the local fault simulation without starting services:
+
+```bash
+python -m demo.run_demo
+```
+
+### Screenshots
+
+Real Operator Console screenshots will be collected under `docs/images/` for
+Dashboard, Incidents, Trace, Governance, Policy, and Evaluation views. See
+[`docs/images/README.md`](docs/images/README.md) for the expected filenames and
+capture requirements. No generated or placeholder screenshots are included.
+
+### Interview Demo Scenario
+
+1. Inject the `SW-01 → SERVER-01` link fault.
+2. Generate incident `INC-DEMO-001`.
+3. Let the Agent collect topology, metric, log, and RAG evidence.
+4. Inspect the ranked root-cause analysis.
+5. Review the structured repair plan.
+6. Approve the high-risk operation through Human-in-the-loop control.
+7. Execute the allowlisted simulated repair.
+8. Verify recovery and inspect the Audit, Trace, and Governance evidence.
+
+The complete walkthrough and interview talking points are in
+[`docs/demo-guide.md`](docs/demo-guide.md).
+
 ## 🎬 Demo
 
 
@@ -355,7 +430,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-341 passed, 1 optional PostgreSQL integration test skipped
+446 passed, 1 optional PostgreSQL integration test skipped
 
 OK
 ```
@@ -985,7 +1060,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影，v0.12.0 增加确定性的 Agent Policy Engine，v0.13.0 增加独立离线 Evaluation Layer。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影，v0.12.0 增加确定性的 Agent Policy Engine，v0.13.0 增加独立离线 Evaluation Layer，v0.15.0 在其上扩展出 EmbeddedOps Agent Platform（Capability Registry、Embedded Copilot、虚拟硬件实验室与自动验证闭环）。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
@@ -1064,6 +1139,23 @@ Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分�
 - CI Docker build 门禁，不自动发布镜像。
 
 限制：TLS、Secret 管理、备份、高可用、Kubernetes、Helm、Service Mesh、自动扩缩容、OpenTelemetry 和真实 Prometheus/Zabbix/ELK/LLM 适配器仍为后续规划。
+
+### Phase 8 — EmbeddedOps Agent Platform（Completed in v0.15.0）
+
+面向嵌入式设备生命周期的 Phase 1+2 交付，复用现有 RBAC、审计、Policy 与 Console 基建：
+
+- **Capability Registry**（`src/network_agent_rag/capability/`）：版本化能力目录（`esp32_compile@1.0` Arduino / `@2.0` ESP-IDF 共存），`backend` 字符串引用解耦执行体，`metadata` 支持按框架/MCU 过滤；Agent 节点执行前 `resolve()`，能力缺失走显式 `CAPABILITY_UNAVAILABLE` 分支；
+- **Embedded Copilot**：Hardware Agent（目标 → `hardware_design.json`，含 MCU 选型目录与 BOM）、Firmware Agent（生成 C 源码）、Debug Agent（编译错误/仿真日志 → Root Cause Analysis），全部依赖注入回调，无 LLM 也有确定性回退；
+- **虚拟硬件实验室**（`src/network_agent_rag/infrastructure/simulation/`）：`SimulatorBackend` 协议 + 确定性 `in_process` 仿真器（编译、虚拟设备、串口日志、测试断言）；Wokwi/Renode 留适配器占位；
+- **自动验证闭环**（显式状态机）：`CREATED → GENERATED → COMPILE_RUNNING → SIMULATION_RUNNING → (FAILED → DEBUGGING → RETRYING) → PASSED/FAILED`；编译错误与仿真断言失败消耗修复重试预算（默认 3 轮），基础设施错误不消耗预算直接终止；
+- **审批与产物**：固件生成后、仿真之前的 human-in-the-loop `interrupt` 审批（`ApprovalRequest` 含 `execution_plan` 步骤清单）；`ArtifactStore` 按 task_id 组织产物（`hardware_design.json`、`main.c`、`compile.attempt*.log`、`report.json`），全部带 SHA-256 防篡改哈希，为 OTA 校验预留；
+- **统一 Task 模型**（`src/network_agent_rag/domain/task/`）：`POST /api/v1/embedded/tasks` 产品入口（goal → task_id → 审批 → 验证结果），Network 与 Embedded 共享 Runtime；
+- **嵌入式 RAG**：`knowledge/embedded/` 语料（MCU 选型、SPI/I2C 故障案例、FreeRTOS 设计、历史 Bug），`search_collections()` 支持跨 embedded/network 知识库检索与去重合并（覆盖 ESP32 Wi-Fi 这类跨域故障）；
+- **权限**：`EMBEDDED_READ` / `EMBEDDED_GENERATE` / `EMBEDDED_SIMULATE` 三权限显式映射到 `EmbeddedEngineer` 角色，Policy 无隐式通道；
+- **评测集**：`evaluation/embedded_cases/`（SPI/Wi-Fi/FreeRTOS 死锁/I2C 冲突/OTA 回滚五类案例），`load_embedded_cases()` 严格校验；
+- **Console**：新增 Embedded Lab 页面——目标提交、任务列表、状态机进度、审批卡片（执行计划 + 批准/拒绝）、产物哈希表与能力目录。
+
+限制：仿真器为确定性内置实现（真实 Wokwi/Renode 适配器为 Planned）；LLM 生成与诊断依赖注入点已留好但默认使用确定性回退；嵌入式任务存储为进程内 TaskStore。
 
 ## 12. Quick Start
 
@@ -1266,6 +1358,27 @@ PROMETHEUS_ENABLED=true
 ```
 
 Compose 不提供默认密码，未填写必需变量时配置解析会失败。默认网关仅绑定 `127.0.0.1:8080`，Grafana 绑定 `127.0.0.1:3000`；Nginx 不对外暴露 `/metrics`。`REDIS_URL` 仅用于 LangGraph Checkpointer，`IDENTITY_REDIS_URL` 使用独立数据库或实例并仅由 Authentication Layer 管理；两者均不用作 Agent Memory 或队列。详见 [deployment/README.md](deployment/README.md)。
+
+### 12.12 EmbeddedOps 演示（v0.15.0）
+
+```bash
+# 启动 API 后提交嵌入式任务（goal → task_id → 审批 → 验证闭环）
+curl -X POST http://127.0.0.1:8000/api/v1/embedded/tasks \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"goal": "设计一个ESP32温湿度采集节点并验证"}'
+
+# 查看挂起的审批请求（含 execution_plan），随后批准并触发仿真验证
+curl http://127.0.0.1:8000/api/v1/embedded/tasks/emb-000001 -H "Authorization: Bearer <token>"
+curl -X POST http://127.0.0.1:8000/api/v1/embedded/tasks/emb-000001/approval \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"decision": "approve", "actor": "reviewer"}'
+
+# 能力目录（Agent 通过 Capability Registry 发现工具）
+curl http://127.0.0.1:8000/api/v1/capabilities -H "Authorization: Bearer <token>"
+```
+
+Console 切换到 **Embedded Lab** 页面可视化完成同一流程。相关测试：`tests/test_capability_registry.py`、`tests/test_embedded_*.py`。
 
 ## 13. License
 

@@ -1,0 +1,8 @@
+{
+  "dataset_version": "embedded_v1",
+  "case_id": "EMB005",
+  "category": "ota_failure",
+  "input": "OTA 下载完成后设备反复重启，新分区校验失败",
+  "expected": "写入前缺少整包 SHA-256 校验，需要校验后再写入并支持双分区回滚",
+  "expected_keywords": ["SHA-256", "回滚", "校验"]
+}

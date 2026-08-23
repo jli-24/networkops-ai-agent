@@ -21,6 +21,15 @@ _ROLE_PERMISSIONS: Mapping[Role, frozenset[Permission]] = MappingProxyType(
                 Permission.EXECUTE_REPAIR,
             }
         ),
+        Role.EMBEDDED_ENGINEER: frozenset(
+            {
+                Permission.VIEW_INCIDENT,
+                Permission.VIEW_TRACE,
+                Permission.EMBEDDED_READ,
+                Permission.EMBEDDED_GENERATE,
+                Permission.EMBEDDED_SIMULATE,
+            }
+        ),
         Role.ADMIN: frozenset(
             {
                 Permission.VIEW_INCIDENT,

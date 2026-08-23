@@ -27,6 +27,9 @@ _AUTHORIZATION_ACTIONS = {
     Permission.EXECUTE_REPAIR: "authorize_api_execution",
     Permission.APPROVE_REPAIR: "authorize_api_approval",
     Permission.MANAGE_SYSTEM: "authorize_api_system",
+    Permission.EMBEDDED_READ: "authorize_api_embedded_read",
+    Permission.EMBEDDED_GENERATE: "authorize_api_embedded_generate",
+    Permission.EMBEDDED_SIMULATE: "authorize_api_embedded_simulate",
 }
 
 

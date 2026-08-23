@@ -1,0 +1,8 @@
+{
+  "dataset_version": "embedded_v1",
+  "case_id": "EMB004",
+  "category": "i2c_failure",
+  "input": "I2C 总线挂两个器件后都无 ACK，单独挂载任一器件正常",
+  "expected": "地址冲突，通过 ADDR 引脚改址或使用 TCA9548A 多路复用",
+  "expected_keywords": ["地址", "冲突"]
+}

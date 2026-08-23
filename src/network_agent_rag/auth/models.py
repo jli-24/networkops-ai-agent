@@ -17,6 +17,7 @@ NonEmptyString = Annotated[
 class Role(StrEnum):
     OPERATOR = "Operator"
     ENGINEER = "Engineer"
+    EMBEDDED_ENGINEER = "EmbeddedEngineer"
     ADMIN = "Admin"
 
 
@@ -27,6 +28,9 @@ class Permission(StrEnum):
     EXECUTE_REPAIR = "EXECUTE_REPAIR"
     APPROVE_REPAIR = "APPROVE_REPAIR"
     MANAGE_SYSTEM = "MANAGE_SYSTEM"
+    EMBEDDED_READ = "EMBEDDED_READ"
+    EMBEDDED_GENERATE = "EMBEDDED_GENERATE"
+    EMBEDDED_SIMULATE = "EMBEDDED_SIMULATE"
 
 
 class User(BaseModel):

@@ -1,5 +1,8 @@
 import type {
+  CapabilityInfo,
   Dashboard,
+  EmbeddedTask,
+  EmbeddedTaskDetail,
   EvaluationSummary,
   IncidentDetail,
   IncidentSummary,
@@ -45,6 +48,24 @@ export function createConsoleClient(token: string, onUnauthorized: () => void) {
     return (await response.json()) as T;
   }
 
+  async function post<T>(path: string, body: unknown): Promise<T> {
+    const response = await fetch(path, {
+      method: "POST",
+      credentials: "omit",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (response.status === 401) {
+      onUnauthorized();
+      throw new ApiError(401);
+    }
+    if (!response.ok) throw new ApiError(response.status);
+    return (await response.json()) as T;
+  }
+
   return {
     dashboard: () => get<Dashboard>("/api/v1/console/dashboard"),
     incidents: (filters: IncidentFilters = {}) =>
@@ -69,6 +90,21 @@ export function createConsoleClient(token: string, onUnauthorized: () => void) {
       get<Page<PolicyDecision>>(`/api/v1/console/policy-decisions${query({ cursor })}`),
     evaluations: (cursor?: string) =>
       get<Page<EvaluationSummary>>(`/api/v1/console/evaluations${query({ cursor })}`),
+    embeddedTasks: () => get<EmbeddedTask[]>("/api/v1/embedded/tasks"),
+    embeddedTask: (taskId: string) =>
+      get<EmbeddedTaskDetail>(`/api/v1/embedded/tasks/${encodeURIComponent(taskId)}`),
+    embeddedCreateTask: (goal: string) =>
+      post<EmbeddedTask>("/api/v1/embedded/tasks", { goal }),
+    embeddedDecideApproval: (
+      taskId: string,
+      decision: "approve" | "reject",
+      actor: string,
+    ) =>
+      post<EmbeddedTask>(
+        `/api/v1/embedded/tasks/${encodeURIComponent(taskId)}/approval`,
+        { decision, actor },
+      ),
+    capabilities: () => get<CapabilityInfo[]>("/api/v1/capabilities"),
   };
 }
 

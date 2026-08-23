@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type ConsoleView = "dashboard" | "incidents" | "trace" | "governance" | "policy" | "evaluation";
+export type ConsoleView = "dashboard" | "incidents" | "trace" | "governance" | "policy" | "evaluation" | "embedded";
 
 const navigation: Array<{ id: ConsoleView; label: string; glyph: string }> = [
   { id: "dashboard", label: "Dashboard", glyph: "▦" },
@@ -9,6 +9,7 @@ const navigation: Array<{ id: ConsoleView; label: string; glyph: string }> = [
   { id: "governance", label: "Governance", glyph: "◎" },
   { id: "policy", label: "Policy", glyph: "◇" },
   { id: "evaluation", label: "Evaluation", glyph: "◫" },
+  { id: "embedded", label: "Embedded Lab", glyph: "⬡" },
 ];
 
 export function ConsoleShell({ view, onNavigate, onDisconnect, children }: {

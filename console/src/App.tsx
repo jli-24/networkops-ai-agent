@@ -4,6 +4,7 @@ import { createConsoleClient } from "./api/client";
 import { AuthGate } from "./auth/AuthGate";
 import { ConsoleShell, type ConsoleView } from "./components/ConsoleShell";
 import { DashboardPage } from "./pages/DashboardPage";
+import { EmbeddedLabPage } from "./pages/EmbeddedLabPage";
 import { EvaluationPage } from "./pages/EvaluationPage";
 import { GovernancePage } from "./pages/GovernancePage";
 import { IncidentsPage } from "./pages/IncidentsPage";
@@ -43,6 +44,7 @@ export default function App() {
     case "governance": page = <GovernancePage client={client} />; break;
     case "policy": page = <PolicyPage client={client} />; break;
     case "evaluation": page = <EvaluationPage client={client} />; break;
+    case "embedded": page = <EmbeddedLabPage client={client} />; break;
     default: page = <DashboardPage client={client} />;
   }
 

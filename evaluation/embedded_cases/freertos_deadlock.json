@@ -1,0 +1,8 @@
+{
+  "dataset_version": "embedded_v1",
+  "case_id": "EMB003",
+  "category": "freertos_deadlock",
+  "input": "两个 FreeRTOS 任务同时挂起，看门狗复位，日志显示各自持有一把互斥锁",
+  "expected": "锁获取顺序不一致导致死锁，需要统一全局锁顺序并使用带超时的获取",
+  "expected_keywords": ["锁", "顺序", "超时"]
+}

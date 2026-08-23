@@ -1,0 +1,8 @@
+{
+  "dataset_version": "embedded_v1",
+  "case_id": "EMB001",
+  "category": "wifi_failure",
+  "input": "ESP32 Wi-Fi 开启后 SPI 采集偶发超时，单独运行采集正常",
+  "expected": "Wi-Fi 射频抢占导致任务被打断，需要对共享外设加互斥锁并绑定核心",
+  "expected_keywords": ["互斥", "核心", "优先级"]
+}

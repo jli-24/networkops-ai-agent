@@ -1,0 +1,8 @@
+{
+  "dataset_version": "embedded_v1",
+  "case_id": "EMB002",
+  "category": "spi_failure",
+  "input": "SPI sensor unreadable, bus returns all 0xFF",
+  "expected": "check clock polarity and phase (CPOL/CPHA) first, then CS wiring",
+  "expected_keywords": ["CPOL", "CPHA", "Mode 0"]
+}

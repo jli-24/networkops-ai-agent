@@ -83,3 +83,46 @@ export interface EvaluationSummary {
   top3_accuracy: number | null;
   created_at: string;
 }
+
+export interface EmbeddedTask {
+  task_id: string;
+  goal: string;
+  status: string;
+  validation_state: string | null;
+  summary: string | null;
+  error: string | null;
+  final_report: string | null;
+}
+
+export interface EmbeddedArtifact {
+  artifact_id: string;
+  type: string;
+  name: string;
+  version: string;
+  created_by: string;
+  sha256: string;
+  size_bytes: number;
+}
+
+export interface EmbeddedTaskDetail extends EmbeddedTask {
+  artifacts: EmbeddedArtifact[];
+  approval_request: {
+    request_id: string;
+    action: string;
+    target: string;
+    risk_level: string;
+    artifact_ref: string | null;
+    execution_plan: string[];
+  } | null;
+  firmware_filename: string | null;
+}
+
+export interface CapabilityInfo {
+  name: string;
+  version: string;
+  type: string;
+  permission: string;
+  backend: string;
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+}
