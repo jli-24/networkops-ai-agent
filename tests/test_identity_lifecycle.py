@@ -33,7 +33,7 @@ from network_agent_rag.auth import (
     TokenPair,
     UserIdentity,
 )
-from network_agent_rag.api.enterprise import (
+from network_agent_rag.packs.networkops.api.enterprise import (
     create_enterprise_app,
     create_storage_enterprise_app,
 )
@@ -397,7 +397,7 @@ class IdentityConfigurationTests(unittest.TestCase):
             {"JWT_SECRET_KEY": SECRET},
             clear=True,
         ), patch(
-            "network_agent_rag.api.enterprise.open_redis_identity_authentication",
+            "network_agent_rag.packs.networkops.api.enterprise.open_redis_identity_authentication",
             side_effect=open_identity,
         ):
             root = Path(directory)

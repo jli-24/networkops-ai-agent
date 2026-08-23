@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 import psycopg
 from redis import Redis
 
-from network_agent_rag.api.enterprise import create_storage_enterprise_app
+from network_agent_rag.packs.networkops.api.enterprise import create_storage_enterprise_app
 from network_agent_rag.core.config import Settings
 from network_agent_rag.auth import JWTTokenManager
 from network_agent_rag.observability.deployment import (

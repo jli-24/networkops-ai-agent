@@ -21,7 +21,7 @@ def refine_query(state: dict[str, object]) -> str:
 
 class AgentWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.agents = import_module("network_agent_rag.agents")
+        self.agents = import_module("network_agent_rag.packs.networkops.agents")
 
     def _factory(self) -> Callable[..., CompiledStateGraph]:
         candidate = getattr(self.agents, "create_agent_workflow", None)

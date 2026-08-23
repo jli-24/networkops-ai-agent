@@ -13,7 +13,7 @@ from langgraph.prebuilt import ToolNode
 
 class LogToolTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.agents = import_module("network_agent_rag.agents")
+        self.agents = import_module("network_agent_rag.packs.networkops.agents")
         self.tool = getattr(self.agents, "query_logs", None)
 
     def test_exports_structured_read_only_tool_for_toolnode(self) -> None:

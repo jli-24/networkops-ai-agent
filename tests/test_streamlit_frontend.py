@@ -11,13 +11,13 @@ from urllib.error import HTTPError, URLError
 
 from streamlit.testing.v1 import AppTest
 
-from network_agent_rag.frontend.client import (
+from network_agent_rag.packs.networkops.frontend.client import (
     FastAPIClient,
     FrontendAPIError,
     SSEEvent,
     _parse_sse,
 )
-from network_agent_rag.frontend.app import NODE_LABELS
+from network_agent_rag.packs.networkops.frontend.app import NODE_LABELS
 
 
 class _Response:
@@ -73,7 +73,7 @@ class SSEParserTests(TestCase):
 
 
 class FastAPIClientTests(TestCase):
-    @patch("network_agent_rag.frontend.client.urlopen")
+    @patch("network_agent_rag.packs.networkops.frontend.client.urlopen")
     def test_enterprise_incident_and_observability_requests(self, urlopen) -> None:
         urlopen.side_effect = [
             _Response(b'{"items":[{"incident_id":"INC-1"}],"next_cursor":null}'),
@@ -118,7 +118,7 @@ class FastAPIClientTests(TestCase):
         self.assertEqual(started[-1].event, "approval_required")
         self.assertEqual(resumed[-1].event, "answer")
 
-    @patch("network_agent_rag.frontend.client.urlopen")
+    @patch("network_agent_rag.packs.networkops.frontend.client.urlopen")
     def test_get_history_encodes_session_and_returns_json(self, urlopen) -> None:
         urlopen.return_value = _Response(
             b'{"session_id":"demo:1","messages":[{"role":"user","content":"hi"}]}'
@@ -136,7 +136,7 @@ class FastAPIClientTests(TestCase):
         self.assertEqual(urlopen.call_args.kwargs["timeout"], 12.0)
         self.assertEqual(result["messages"][0]["content"], "hi")
 
-    @patch("network_agent_rag.frontend.client.urlopen")
+    @patch("network_agent_rag.packs.networkops.frontend.client.urlopen")
     def test_stream_chat_posts_json_and_yields_complete_stream(self, urlopen) -> None:
         urlopen.return_value = _Response(
             b"event: start\n"
@@ -158,7 +158,7 @@ class FastAPIClientTests(TestCase):
         self.assertEqual(request.get_header("Accept"), "text/event-stream")
         self.assertEqual([event.event for event in events], ["start", "answer"])
 
-    @patch("network_agent_rag.frontend.client.urlopen")
+    @patch("network_agent_rag.packs.networkops.frontend.client.urlopen")
     def test_rejects_stream_without_answer_or_error(self, urlopen) -> None:
         urlopen.return_value = _Response(
             b"event: start\ndata: {\"session_id\":\"demo\"}\n\n"
@@ -169,7 +169,7 @@ class FastAPIClientTests(TestCase):
 
         self.assertEqual(ctx.exception.code, "INCOMPLETE_STREAM")
 
-    @patch("network_agent_rag.frontend.client.urlopen")
+    @patch("network_agent_rag.packs.networkops.frontend.client.urlopen")
     def test_normalizes_http_and_connection_errors(self, urlopen) -> None:
         http_error = HTTPError(
             "http://agent.local/api/v1/history",
@@ -197,6 +197,8 @@ class StreamlitAppTests(TestCase):
         Path(__file__).parents[1]
         / "src"
         / "network_agent_rag"
+        / "packs"
+        / "networkops"
         / "frontend"
         / "app.py"
     )
@@ -373,7 +375,7 @@ class StreamlitAppTests(TestCase):
         self.assertTrue(any("暂无引用文档" in item.value for item in app.info))
         self.assertGreaterEqual(len(app.json), 2)
 
-    @patch("network_agent_rag.frontend.client.urlopen")
+    @patch("network_agent_rag.packs.networkops.frontend.client.urlopen")
     def test_chat_submission_consumes_sse_and_updates_latest_response(
         self,
         urlopen,
@@ -408,7 +410,7 @@ class StreamlitAppTests(TestCase):
             ["user", "assistant"],
         )
 
-    @patch("network_agent_rag.frontend.client.urlopen")
+    @patch("network_agent_rag.packs.networkops.frontend.client.urlopen")
     def test_sidebar_loads_history_for_the_selected_session(self, urlopen) -> None:
         urlopen.return_value = _Response(
             b'{"session_id":"saved:1","messages":['
@@ -433,7 +435,7 @@ class StreamlitAppTests(TestCase):
         )
         self.assertIsNone(app.session_state["last_response"])
 
-    @patch("network_agent_rag.frontend.client.urlopen")
+    @patch("network_agent_rag.packs.networkops.frontend.client.urlopen")
     def test_failed_chat_clears_stale_details_without_fake_answer(self, urlopen) -> None:
         urlopen.side_effect = URLError("connection refused")
         app = AppTest.from_file(str(self.app_path)).run()

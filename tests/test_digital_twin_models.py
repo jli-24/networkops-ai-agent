@@ -6,7 +6,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from network_agent_rag.digital_twin import Device, Link
+from network_agent_rag.packs.networkops.digital_twin import Device, Link
 
 
 class DigitalTwinModelTests(unittest.TestCase):

@@ -34,7 +34,7 @@ class KeywordEmbeddings(Embeddings):
 
 class SearchCollectionsTests(unittest.TestCase):
     def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
+        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.persist = Path(self._tmp.name) / "chroma"
         self.embeddings = KeywordEmbeddings()
         self.embedded = create_vector_store(
@@ -108,7 +108,7 @@ class EmbeddedCorpusTests(unittest.TestCase):
             load_embedded_documents("does/not/exist")
 
     def test_builds_vector_store_from_corpus(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             store = build_embedded_vector_store(
                 persist_directory=Path(tmp) / "chroma",
                 embeddings=KeywordEmbeddings(),

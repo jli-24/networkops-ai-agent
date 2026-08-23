@@ -7,7 +7,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from network_agent_rag.digital_twin import Fault
+from network_agent_rag.packs.networkops.digital_twin import Fault
 
 
 class FaultModelTests(unittest.TestCase):

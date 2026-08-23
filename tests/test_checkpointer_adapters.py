@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from network_agent_rag.api.enterprise import create_storage_enterprise_app
-from network_agent_rag.api.enterprise import _checkpoint_context, _storage_context
+from network_agent_rag.packs.networkops.api.enterprise import create_storage_enterprise_app
+from network_agent_rag.packs.networkops.api.enterprise import _checkpoint_context, _storage_context
 from network_agent_rag.storage.postgres import open_postgres_checkpointer
 from network_agent_rag.storage.redis import open_redis_checkpointer
 from network_agent_rag.storage.sqlite import open_sqlite_checkpointer
@@ -130,10 +130,10 @@ class StorageApplicationAssemblyTests(unittest.TestCase):
                     return MagicMock()
 
                 with TemporaryDirectory() as directory, patch(
-                    "network_agent_rag.api.enterprise._storage_context",
+                    "network_agent_rag.packs.networkops.api.enterprise._storage_context",
                     return_value=StoreContext(),
                 ), patch(
-                    "network_agent_rag.api.enterprise._checkpoint_context",
+                    "network_agent_rag.packs.networkops.api.enterprise._checkpoint_context",
                     side_effect=checkpoint_context,
                 ):
                     app = create_storage_enterprise_app(
@@ -158,7 +158,7 @@ class StorageApplicationAssemblyTests(unittest.TestCase):
     def test_storage_setup_failure_does_not_expose_connection_url(self) -> None:
         secret_url = "postgresql://user:top-secret@example/database"
         with patch(
-            "network_agent_rag.api.enterprise.open_postgres_stores",
+            "network_agent_rag.packs.networkops.api.enterprise.open_postgres_stores",
             side_effect=RuntimeError(secret_url),
         ), self.assertRaises(RuntimeError) as raised:
             with _storage_context(
@@ -182,7 +182,7 @@ class CheckpointFailureSanitizationTests(unittest.IsolatedAsyncioTestCase):
             yield
 
         with patch(
-            "network_agent_rag.api.enterprise.open_redis_checkpointer",
+            "network_agent_rag.packs.networkops.api.enterprise.open_redis_checkpointer",
             side_effect=failing_context,
         ), self.assertRaises(RuntimeError) as raised:
             async with _checkpoint_context(

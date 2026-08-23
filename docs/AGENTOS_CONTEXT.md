@@ -24,7 +24,7 @@
 
 **v0.16 步骤 2.5（已完成，2026-08-24）**：推送前收口——注册期知识初始化（幂等、fail-loud、fresh-init 可执行验证）、向量库卫生检查（结论 RFC §12：无脏数据，demo 子目录自包含）、verify-fresh L1 落地、执行提示词持久化。
 
-**v0.16 步骤 3（待下达）**：network pack 迁移（排除列表归零是其完成条件）。
+**v0.16 步骤 3（已完成，2026-08-24）**：network pack 迁移——16 模块入包、api.benchmarks 重分类、燃尽清单归零；golden fixtures（审批挂起 + mid-flight）新布局恢复并 resume 至 executed；全量 485 + Console 17 + verify-fresh 双 pack 全绿。Phase 0 四项结论见 RFC §11。
 **v0.16 步骤 4/5（排队）**：main.py 全面 pack 驱动装配 + 架构测试收口；README Roadmap + 0.16.0 + tag。
 
 ### 双清单机制（铁律 21，2026-08-24 建档）
@@ -35,11 +35,10 @@
 
 | 设施 | 现状 | 裁决窗口 |
 | --- | --- | --- |
-| `digital_twin/` | 网络域孪生（七节点校园网），未接 Agent 工作流 | 步骤 3 P0-1 归属初裁（领域资产→pack）；DT 作为验证层的重设计属 v0.40 |
-| `frontend/`（Streamlit） | 旧版演示前端，Console 已取代主入口 | 步骤 3 P0-1 裁决（候选：随 network pack 或退役） |
-| `demo.py` / `demo_main.py` / `multi_agent_demo.py` / `multi_agent_main.py` | 顶层演示入口（网络域） | 步骤 3 P0-1 裁决 |
-| `demo/`（包）+ `scripts/demo.*` | v0.14 本地故障演示层，含独立 persist 目录（`data/chroma/sw1_sw2_*`） | 步骤 3 P0-1 裁决（子目录归属一并处理，见 RFC §12） |
-| `api/benchmarks.py` / `api/history.py` / `api/observability.py` | 平台服务投影（跨域） | 步骤 4 装配收口时定平台/pack 归属 |
+| ~~`digital_twin/`、`frontend/`、四个顶层 demo 入口~~ | **已裁决（2026-08-24，步骤 3）**：全部随 network pack 迁入 `packs/networkops/` | 已执行 |
+| `demo/`（包）+ `scripts/demo.*` | v0.14 本地故障演示层（引用已重指向 pack），含独立 persist 目录（`data/chroma/sw1_sw2_*`） | 步骤 4 装配收口时定归属（子目录归属见 RFC §12） |
+| `api/benchmarks.py` / `api/observability.py` | 平台服务投影（跨域）；observability 的 `IncidentId` 已本地化（不再 import pack） | 步骤 4 装配收口时复核 |
+| ~~`api/history.py`~~ | **已裁决**：随 chat 面迁入 network pack | 已执行 |
 | `governance/` / `observability/` / `evaluation/`（runner） | 平台设施，跨域复用 | 留 core（初裁），v0.20 复核 |
 
 清单二条目"临时归属+待裁决"均为显式记录；裁决时点到来前不动其内部实现（红线）。

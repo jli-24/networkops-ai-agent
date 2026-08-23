@@ -13,7 +13,7 @@ from langgraph.types import Command
 from pydantic import ValidationError
 
 from network_agent_rag.audit import AuditEvent, AuditEventType, SQLiteAuditLog
-from network_agent_rag.api.enterprise import create_enterprise_app
+from network_agent_rag.packs.networkops.api.enterprise import create_enterprise_app
 from network_agent_rag.auth import (
     AuthorizationError,
     Permission,

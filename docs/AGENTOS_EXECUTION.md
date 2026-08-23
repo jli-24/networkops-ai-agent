@@ -21,11 +21,11 @@
 ## 二、状态块（唯一随进度更新的部分）
 
 - 版本：v0.16 进行中（基线 v0.15.0 已 tag 推远端）
-- 测试基线：后端 480 passed + 1 skipped（既有可选项）/ Console 17（2026-08-24 步骤 2.5 门禁实测）
-- 远端：`e39837a`（章程+RFC）、`abbba3b`（契约+注册器）、`2e7f4cb`（Phase 0+fixtures）、`4e3baf9`（embedded pack 迁移）均已推送；步骤 2.5 收口提交（注册期知识初始化 + 卫生检查 + verify-fresh + 执行提示词入库）**在 push 门禁点停等裁决**
+- 测试基线：后端 485 passed + 1 skipped / Console 17（2026-08-24 步骤 3 门禁实测，双跑确认）
+- 远端：至 `4e3baf9`（embedded pack 迁移）已推送；本地待推：`45d91a2`（步骤 2.5 收口）、`bd3a00f`（network Phase 0+fixtures）、步骤 3 迁移提交——**均在 push 门禁点停等裁决**
 - v0.16 证明命题："契约可容纳两个既有领域"（通用性证明属 v0.18）
 - 已知候选修复队列：STM32 选型回退怪癖（goal 含 ESP32 无 wifi/云/mqtt 时选 STM32F103；fixture 已固化现状；不阻塞）
-- 排除列表双清单机制：NETWORK_STILL_IN_CORE（17 项，步骤 3 燃尽归零）+ PLATFORM_FACILITIES_PENDING（digital_twin/demo/frontend 等，持久追踪不燃尽），见 CONTEXT §二
+- 排除列表双清单机制：NETWORK_STILL_IN_CORE **已归零**（步骤 3 完成）+ PLATFORM_FACILITIES_PENDING（api.benchmarks/api.observability/demo 包/governance 等，持久追踪），见 CONTEXT §二
 - `make verify-fresh`（L1）已落地：`scripts/verify_fresh.py`，零状态启动 + 注册期知识初始化 + API 端到端 + demo 配方
 
 ## 三、执行循环（一切工作走同一个环，不设例外）
@@ -43,7 +43,7 @@
 ## 五、当前任务队列（按序执行，耗尽即到版本边界）
 
 - 【队列项 A｜v0.16 步骤 2.5：推送前收口】**已完成（2026-08-24）**：① 注册期知识初始化（幂等+fail-loud+fresh-init/幂等/fail-loud 测试 6 枚）② 向量库卫生检查（RFC §12：无脏数据，根目录保持零状态，备份 `data/chroma.bak-20260824`）③ 双清单机制入 CONTEXT ④ `make verify-fresh` L1 落地 ⑤ 门禁全绿 → **push 门禁点停等裁决**
-- 【队列项 B｜v0.16 步骤 3：network pack 迁移】Phase 0（P0-1 归属三分法盘点 17 项 / P0-2 checkpoint 审计+golden fixture / P0-3 热点回归盘点 top-3 / P0-4 评测集盘点）→ 实现（全走管线、权限角色入 manifest 语义零变化、knowledge 幂等初始化第一天做对、双 pack 装配、平台 router 参数注入不 import packs、双清单扫描）→ 门禁（全量+verify-fresh 双 pack 零状态+双 API 各一条端到端）【汇报点：八项证据】
+- 【队列项 B｜v0.16 步骤 3：network pack 迁移】**已完成（2026-08-24）**（原文如下备查）：Phase 0（P0-1 归属三分法盘点 17 项 / P0-2 checkpoint 审计+golden fixture / P0-3 热点回归盘点 top-3 / P0-4 评测集盘点）→ 实现（全走管线、权限角色入 manifest 语义零变化、knowledge 幂等初始化第一天做对、双 pack 装配、平台 router 参数注入不 import packs、双清单扫描）→ 门禁（全量+verify-fresh 双 pack 零状态+双 API 各一条端到端）【汇报点：八项证据】
 - 【队列项 C｜v0.16 收尾】README、十五项清单逐项核对（#9/#10 终验）、版本号、verify-fresh L2（全新克隆）、tag v0.16.0、回答"证明了什么"【tag 门禁点】
 - 【队列耗尽 → 版本边界规程】更新状态块与 CONTEXT → 起草 v0.18 RFC（Research Pack thin slice + workflow 级声明式依赖）→ 停等外部评审。禁止在当前提示词里预做下一版本功能决策。
 

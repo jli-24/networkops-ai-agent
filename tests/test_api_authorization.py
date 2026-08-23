@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 from starlette.requests import Request
 
-from network_agent_rag.api.enterprise import create_enterprise_app
+from network_agent_rag.packs.networkops.api.enterprise import create_enterprise_app
 from network_agent_rag.audit import AuditEventType, SQLiteAuditLog
 from network_agent_rag.auth import AuthorizationError, Permission, Role, User, UserContext
 from network_agent_rag.auth.dependencies import (

@@ -40,7 +40,7 @@ def parse_sse(payload: str) -> list[tuple[str, dict[str, object]]]:
 
 class MultiAgentDemoTests(unittest.TestCase):
     def test_demo_streams_supervisor_handoffs_and_api_compatible_answer(self) -> None:
-        demo = import_module("network_agent_rag.multi_agent_demo")
+        demo = import_module("network_agent_rag.packs.networkops.demo.multi_agent_demo")
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=DeprecationWarning)
             with tempfile.TemporaryDirectory() as directory:

@@ -14,12 +14,12 @@ from langchain_core.documents import Document
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 
-from network_agent_rag.agents.enterprise import (
+from network_agent_rag.packs.networkops.agents.enterprise import (
     AllowlistedExecutor,
     create_enterprise_workflow,
 )
-from network_agent_rag.agents.enterprise.state import RepairAction
-from network_agent_rag.agents.multi_agent.state import RepairPlan, SupervisorPlan
+from network_agent_rag.packs.networkops.agents.enterprise.state import RepairAction
+from network_agent_rag.packs.networkops.agents.multi_agent.state import RepairPlan, SupervisorPlan
 from network_agent_rag.audit import SQLiteAuditLog
 from network_agent_rag.auth import Role, User, UserContext
 from network_agent_rag.core.config import Settings

@@ -11,8 +11,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 from pydantic import ValidationError
 
-from network_agent_rag.agents.enterprise import AllowlistedExecutor
-from network_agent_rag.api.enterprise import create_sqlite_enterprise_app
+from network_agent_rag.packs.networkops.agents.enterprise import AllowlistedExecutor
+from network_agent_rag.packs.networkops.api.enterprise import create_sqlite_enterprise_app
 from network_agent_rag.audit import AuditEventType, SQLiteAuditLog
 from network_agent_rag.auth import (
     AuthorizationError,

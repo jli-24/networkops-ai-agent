@@ -10,7 +10,7 @@ import unittest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from network_agent_rag.api.enterprise import create_enterprise_app
+from network_agent_rag.packs.networkops.api.enterprise import create_enterprise_app
 from network_agent_rag.audit import AuditEventType, SQLiteAuditLog
 from network_agent_rag.observability import (
     CallSummary,

@@ -16,7 +16,6 @@ class PackageStructureTests(unittest.TestCase):
 
     def test_module_boundaries_are_importable(self) -> None:
         modules = (
-            "agents",
             "api",
             "core",
             "domain",
@@ -31,7 +30,7 @@ class PackageStructureTests(unittest.TestCase):
 
     def test_application_modules_are_importable(self) -> None:
         modules = (
-            "network_agent_rag.api.router",
+            "network_agent_rag.packs.networkops.api.router",
             "network_agent_rag.core.config",
             "network_agent_rag.main",
         )
@@ -73,10 +72,9 @@ class ApplicationTests(unittest.TestCase):
     def test_health_endpoint_reports_service_status(self) -> None:
         module = import_module("network_agent_rag.main")
         application = module.create_app()
-        router_module = import_module("network_agent_rag.api.router")
 
         self.assertIn("/api/v1/health", application.openapi()["paths"])
-        self.assertEqual(asyncio.run(router_module.health()), {"status": "ok"})
+        self.assertEqual(asyncio.run(module.health()), {"status": "ok"})
 
 
 if __name__ == "__main__":

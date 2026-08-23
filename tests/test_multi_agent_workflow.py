@@ -7,8 +7,8 @@ import unittest
 
 from langchain_core.documents import Document
 
-from network_agent_rag.agents import DiagnosisPlan
-from network_agent_rag.agents.multi_agent import (
+from network_agent_rag.packs.networkops.agents import DiagnosisPlan
+from network_agent_rag.packs.networkops.agents.multi_agent import (
     MultiAgentState,
     create_multi_agent_workflow,
 )
@@ -117,7 +117,7 @@ class MultiAgentWorkflowTests(unittest.TestCase):
 
     def test_exports_state_and_builds_supervisor_with_five_agents(self) -> None:
         import network_agent_rag
-        import network_agent_rag.agents as agents
+        import network_agent_rag.packs.networkops.agents as agents
 
         self.assertEqual(network_agent_rag.__version__, "0.15.0")
         self.assertIs(agents.create_multi_agent_workflow, create_multi_agent_workflow)

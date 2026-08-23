@@ -11,14 +11,14 @@ import unittest
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 
-from network_agent_rag.agents.enterprise import (
+from network_agent_rag.packs.networkops.agents.enterprise import (
     AllowlistedExecutor,
     ApprovalConflict,
     evaluate_risk,
     execute_actions,
     validate_approval,
 )
-from network_agent_rag.api.enterprise import create_enterprise_app
+from network_agent_rag.packs.networkops.api.enterprise import create_enterprise_app
 from network_agent_rag.audit import SQLiteAuditLog
 from tests.test_checkpoint import build_graph
 

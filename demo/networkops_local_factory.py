@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from network_agent_rag.agents.enterprise import create_enterprise_workflow
-from network_agent_rag.agents.multi_agent.state import SupervisorPlan
+from network_agent_rag.packs.networkops.agents.enterprise import create_enterprise_workflow
+from network_agent_rag.packs.networkops.agents.multi_agent.state import SupervisorPlan
 
 
 def create_workflow(

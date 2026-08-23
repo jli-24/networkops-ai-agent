@@ -12,7 +12,7 @@ import networkx as nx
 
 
 def load_topology(payload: object):
-    domain = import_module("network_agent_rag.domain")
+    domain = import_module("network_agent_rag.packs.networkops.domain.topology")
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory, "topology.json")
         path.write_text(json.dumps(payload), encoding="utf-8")
@@ -21,7 +21,7 @@ def load_topology(payload: object):
 
 class NetworkTopologyTests(unittest.TestCase):
     def test_loads_json_and_exposes_topology_queries(self) -> None:
-        domain = import_module("network_agent_rag.domain")
+        domain = import_module("network_agent_rag.packs.networkops.domain.topology")
         topology_type = getattr(domain, "NetworkTopology", None)
         self.assertIsNotNone(topology_type)
         if topology_type is None:

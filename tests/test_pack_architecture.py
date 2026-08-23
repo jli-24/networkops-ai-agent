@@ -17,28 +17,19 @@ SRC = Path(__file__).resolve().parent.parent / "src" / "network_agent_rag"
 
 ASSEMBLY_MODULES = frozenset({"network_agent_rag.main"})
 
-# Domain (network) modules still living in core; step 3 burns this down.
-NETWORK_STILL_IN_CORE = (
-    "network_agent_rag.agents.diagnosis_workflow",
-    "network_agent_rag.agents.enterprise",
-    "network_agent_rag.agents.log_tools",
-    "network_agent_rag.agents.monitoring_tools",
-    "network_agent_rag.agents.multi_agent",
-    "network_agent_rag.agents.workflow",
+# Burn-down COMPLETE (v0.16 step 3): every network domain module now lives
+# in packs/networkops. Kept as an explicit (empty) registry so future
+# domain leakage into core has an obvious place to be caught.
+NETWORK_STILL_IN_CORE: tuple[str, ...] = ()
+
+# Platform facilities that deliberately remain in core (dual-list
+# mechanism, see docs/AGENTOS_CONTEXT.md); adjudication windows tracked there.
+PLATFORM_FACILITIES_REMAINING = (
     "network_agent_rag.api.benchmarks",
-    "network_agent_rag.api.console",
-    "network_agent_rag.api.enterprise",
-    "network_agent_rag.api.router",
-    "network_agent_rag.demo",
-    "network_agent_rag.demo_main",
-    "network_agent_rag.digital_twin",
-    "network_agent_rag.domain.topology",
-    "network_agent_rag.frontend",
-    "network_agent_rag.multi_agent_demo",
-    "network_agent_rag.multi_agent_main",
+    "network_agent_rag.api.observability",
 )
 
-# Embedded assets must have left core entirely in step 2.
+# Domain assets that must live ONLY in their packs (steps 2+3).
 EMBEDDED_PATHS_REMOVED = (
     "network_agent_rag.agents.embedded",
     "network_agent_rag.domain.embedded",
@@ -49,6 +40,29 @@ EMBEDDED_PATHS_REMOVED = (
     "network_agent_rag.api.embedded",
     "network_agent_rag.evaluation.embedded_cases",
 )
+NETWORK_PATHS_REMOVED = (
+    "network_agent_rag.agents",
+    "network_agent_rag.agents.diagnosis_workflow",
+    "network_agent_rag.agents.enterprise",
+    "network_agent_rag.agents.log_tools",
+    "network_agent_rag.agents.monitoring_tools",
+    "network_agent_rag.agents.multi_agent",
+    "network_agent_rag.agents.workflow",
+    "network_agent_rag.api.router",
+    "network_agent_rag.api.schemas",
+    "network_agent_rag.api.history",
+    "network_agent_rag.api.console",
+    "network_agent_rag.api.enterprise",
+    "network_agent_rag.api.enterprise_schemas",
+    "network_agent_rag.domain.topology",
+    "network_agent_rag.digital_twin",
+    "network_agent_rag.frontend",
+    "network_agent_rag.demo",
+    "network_agent_rag.demo_main",
+    "network_agent_rag.multi_agent_demo",
+    "network_agent_rag.multi_agent_main",
+)
+
 
 
 def _module_name(path: Path) -> str:
@@ -110,15 +124,32 @@ class CoreIsolationTests(unittest.TestCase):
         ]
         self.assertEqual(present, [], "embedded assets must live in the pack only")
 
-    def test_network_burn_down_inventory_is_honest(self) -> None:
+    def test_old_network_module_paths_are_gone(self) -> None:
+        present = [
+            module
+            for module in NETWORK_PATHS_REMOVED
+            if self._spec(module) is not None
+        ]
+        self.assertEqual(present, [], "network assets must live in the pack only")
+
+    def test_network_burn_down_is_complete(self) -> None:
+        self.assertEqual(NETWORK_STILL_IN_CORE, ())
+
+    def test_platform_facilities_stay_in_core(self) -> None:
         missing = [
             module
-            for module in NETWORK_STILL_IN_CORE
+            for module in PLATFORM_FACILITIES_REMAINING
             if self._spec(module) is None
         ]
-        self.assertEqual(
-            missing, [], "burn-down list must only name modules that still exist"
-        )
+        self.assertEqual(missing, [])
+
+    def test_both_packs_registered_in_default_app(self) -> None:
+        from fastapi.testclient import TestClient
+
+        from network_agent_rag.main import create_app
+
+        client = TestClient(create_app())
+        self.assertEqual(client.get("/api/v1/health").status_code, 200)
 
     def test_embedded_pack_exists(self) -> None:
         from network_agent_rag.packs.embeddedops import EMBEDDEDOPS_PACK

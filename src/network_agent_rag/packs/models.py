@@ -43,7 +43,7 @@ def _validate_import_path(value: str) -> str:
 
 
 class RouterSpec(PackModel):
-    prefix: str = Field(min_length=1)
+    prefix: str = Field(default="", description="empty = mount at API root")
     factory: str = Field(min_length=1)
 
     @field_validator("factory")

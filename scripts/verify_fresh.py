@@ -39,6 +39,9 @@ class DeterministicEmbeddings(Embeddings):
 def main() -> int:
     from network_agent_rag.main import create_app
     from network_agent_rag.packs.embeddedops.api import EmbeddedServices
+    from network_agent_rag.packs.networkops.demo.multi_agent_demo import (
+        create_multi_agent_demo_app,
+    )
 
     tmp = tempfile.mkdtemp(prefix="agentos-verify-fresh-")
     root = Path(tmp)
@@ -49,11 +52,11 @@ def main() -> int:
             knowledge_persist_directory=str(root / "chroma"),
             knowledge_embeddings=DeterministicEmbeddings(),
         )
-        pack = services.pack_registry.list(enabled=True)
-        print(f"[verify-fresh] enabled packs: {[p.name for p in pack]}")
-        assert [p.name for p in pack] == ["embeddedops"], "expected embeddedops"
-
         client = TestClient(create_app(embedded_services=services))
+        packs = services.pack_registry.list(enabled=True)
+        pack_names = sorted(p.name for p in packs)
+        print(f"[verify-fresh] enabled packs: {pack_names}")
+        assert pack_names == ["embeddedops", "networkops"], "expected both packs"
 
         health = client.get("/api/v1/health")
         print(f"[verify-fresh] GET /api/v1/health -> {health.status_code}")
@@ -88,6 +91,29 @@ def main() -> int:
         artifact_names = [item["name"] for item in artifacts["artifacts"]]
         print(f"[verify-fresh] artifacts: {artifact_names}")
         assert "hardware_design.json" in artifact_names and "main.c" in artifact_names
+
+        # Network pack end-to-end: deterministic demo workflow through the
+        # same platform assembly, streamed over the chat SSE surface.
+        network_app = create_multi_agent_demo_app(
+            persist_directory=str(root / "network-chroma"),
+            embeddings=DeterministicEmbeddings(),
+        )
+        network_client = TestClient(network_app)
+        with network_client.stream(
+            "POST",
+            "/api/v1/chat",
+            json={"query": "分析 SW1 到 SW2 丢包", "session_id": "verify-fresh"},
+        ) as response:
+            print(f"[verify-fresh] POST /api/v1/chat -> {response.status_code}")
+            assert response.status_code == 200
+            events = []
+            for line in response.iter_lines():
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8")
+                if line.startswith("event:"):
+                    events.append(line.split(":", 1)[1].strip())
+        print(f"[verify-fresh] chat SSE events: {events[:6]}...")
+        assert "start" in events and "answer" in events
 
         print(
             "[verify-fresh] demo recipe: capabilities =",

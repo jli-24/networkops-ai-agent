@@ -8,7 +8,7 @@ import unittest
 from pydantic import ValidationError
 
 import network_agent_rag
-from network_agent_rag.agents.enterprise import EnterpriseState
+from network_agent_rag.packs.networkops.agents.enterprise import EnterpriseState
 from network_agent_rag.audit import AuditEvent, AuditEventType
 from network_agent_rag.auth import Permission
 from network_agent_rag.observability.governance import (

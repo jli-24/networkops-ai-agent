@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import unittest
 
-from network_agent_rag.agents.multi_agent.repair_agent import default_repair_plan
-from network_agent_rag.agents.multi_agent.state import validate_repair_plan
-from network_agent_rag.agents.multi_agent.supervisor import validate_supervisor_plan
+from network_agent_rag.packs.networkops.agents.multi_agent.repair_agent import default_repair_plan
+from network_agent_rag.packs.networkops.agents.multi_agent.state import validate_repair_plan
+from network_agent_rag.packs.networkops.agents.multi_agent.supervisor import validate_supervisor_plan
 
 from tests.test_multi_agent_workflow import incident_plan
 

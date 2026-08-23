@@ -6,7 +6,21 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from network_agent_rag.api.enterprise_schemas import IncidentId
+from typing import Annotated as _Annotated
+
+from pydantic import StringConstraints as _StringConstraints
+
+# Wire-compatible incident id contract; the domain-canonical definition
+# lives in packs/networkops (platform facilities must not import packs).
+IncidentId = _Annotated[
+    str,
+    _StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    ),
+]
 from network_agent_rag.observability import (
     IncidentTimelineBuilder,
     MetricsService,

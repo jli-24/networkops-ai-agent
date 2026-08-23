@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timezone
 import unittest
 
-from network_agent_rag.digital_twin import Device, Link, NetworkDigitalTwin
+from network_agent_rag.packs.networkops.digital_twin import Device, Link, NetworkDigitalTwin
 
 
 class NetworkDigitalTwinTests(unittest.TestCase):

@@ -34,7 +34,15 @@ def parse_sse(payload: str) -> list[tuple[str, dict[str, object]]]:
 class DiagnosisDemoTests(unittest.TestCase):
     def test_sample_knowledge_describes_the_optical_degradation_symptoms(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        knowledge = root / "knowledge" / "diagnosis" / "optical_module_degradation.md"
+        knowledge = (
+            root
+            / "src"
+            / "network_agent_rag"
+            / "packs"
+            / "networkops"
+            / "knowledge_corpus"
+            / "optical_module_degradation.md"
+        )
         text = knowledge.read_text(encoding="utf-8")
         self.assertIn("CRC", text)
         self.assertIn("接收光功率", text)
@@ -42,7 +50,7 @@ class DiagnosisDemoTests(unittest.TestCase):
         self.assertIn("人工批准", text)
 
     def test_demo_uses_chroma_and_streams_all_diagnosis_nodes(self) -> None:
-        demo = import_module("network_agent_rag.demo")
+        demo = import_module("network_agent_rag.packs.networkops.demo.demo")
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=DeprecationWarning)
             with tempfile.TemporaryDirectory() as directory:

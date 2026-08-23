@@ -15,7 +15,7 @@ from tests.test_evaluation_models import case_payload
 class EvaluationDatasetTests(unittest.TestCase):
     def test_repository_dataset_covers_all_categories(self) -> None:
         cases = load_evaluation_dataset(
-            Path("benchmarks/network_fault_v1.jsonl"),
+            Path("src/network_agent_rag/packs/networkops/evaluation/network_fault_v1.jsonl"),
             expected_version="v1",
         )
 

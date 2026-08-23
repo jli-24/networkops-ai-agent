@@ -104,7 +104,7 @@ def documents(query: str) -> list[Document]:
 
 class DiagnosisWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.agents = import_module("network_agent_rag.agents")
+        self.agents = import_module("network_agent_rag.packs.networkops.agents")
         self.factory: Callable[..., CompiledStateGraph] = getattr(
             self.agents, "create_network_diagnosis_workflow"
         )

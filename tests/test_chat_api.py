@@ -22,7 +22,7 @@ warnings.filterwarnings(
 
 from starlette.testclient import TestClient
 
-from network_agent_rag.agents import create_agent_workflow
+from network_agent_rag.packs.networkops.agents import create_agent_workflow
 
 
 def parse_sse(payload: str) -> list[tuple[str, dict[str, object]]]:
@@ -117,11 +117,11 @@ class ChatApiTests(unittest.TestCase):
         return response, parse_sse(response.text)
 
     def test_exports_pydantic_api_models(self) -> None:
-        spec = importlib.util.find_spec("network_agent_rag.api.schemas")
+        spec = importlib.util.find_spec("network_agent_rag.packs.networkops.api.schemas")
         self.assertIsNotNone(spec)
         if spec is None:
             return
-        schemas = import_module("network_agent_rag.api.schemas")
+        schemas = import_module("network_agent_rag.packs.networkops.api.schemas")
         for name in (
             "ChatRequest",
             "ChatResponse",
@@ -236,7 +236,7 @@ class ChatApiTests(unittest.TestCase):
         self.assertEqual(history_b["messages"][0]["content"], "Other question")
 
     def test_history_store_returns_message_copies(self) -> None:
-        history_module = import_module("network_agent_rag.api.history")
+        history_module = import_module("network_agent_rag.packs.networkops.api.history")
         store = history_module.InMemoryHistoryStore()
         store.append_exchange("session-1", "Original question", "Original answer")
 
@@ -246,7 +246,7 @@ class ChatApiTests(unittest.TestCase):
         self.assertEqual(store.get("session-1")[0].content, "Original question")
 
     def test_history_store_keeps_concurrent_exchanges_atomic(self) -> None:
-        history_module = import_module("network_agent_rag.api.history")
+        history_module = import_module("network_agent_rag.packs.networkops.api.history")
         store = history_module.InMemoryHistoryStore()
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = [
@@ -268,7 +268,7 @@ class ChatApiTests(unittest.TestCase):
 
     def test_create_app_preserves_a_falsey_injected_history_store(self) -> None:
         main = import_module("network_agent_rag.main")
-        history_module = import_module("network_agent_rag.api.history")
+        history_module = import_module("network_agent_rag.packs.networkops.api.history")
 
         class FalseyStore(history_module.InMemoryHistoryStore):
             def __bool__(self) -> bool:
@@ -296,7 +296,7 @@ class ChatApiTests(unittest.TestCase):
 
     def test_unexpected_graph_error_streams_generic_error_without_history(self) -> None:
         client = TestClient(self._create_app(BrokenWorkflow()))
-        with self.assertLogs("network_agent_rag.api.router", level="ERROR"):
+        with self.assertLogs("network_agent_rag.packs.networkops.api.router", level="ERROR"):
             _, events = self._post_events(client, session_id="broken-session")
 
         self.assertEqual(
@@ -319,7 +319,7 @@ class ChatApiTests(unittest.TestCase):
             ]
         )
         client = TestClient(self._create_app(StateWorkflow(state)))
-        with self.assertLogs("network_agent_rag.api.router", level="ERROR"):
+        with self.assertLogs("network_agent_rag.packs.networkops.api.router", level="ERROR"):
             _, events = self._post_events(client, session_id="serialization-failure")
 
         self.assertEqual(events[-1][0], "error")
@@ -333,7 +333,7 @@ class ChatApiTests(unittest.TestCase):
         client = TestClient(
             self._create_app(StateWorkflow(final_state(iteration="1")))
         )
-        with self.assertLogs("network_agent_rag.api.router", level="ERROR"):
+        with self.assertLogs("network_agent_rag.packs.networkops.api.router", level="ERROR"):
             _, events = self._post_events(client, session_id="strict-state")
 
         self.assertEqual(events[-1][0], "error")

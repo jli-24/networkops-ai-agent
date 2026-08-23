@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from network_agent_rag.digital_twin import (
+from network_agent_rag.packs.networkops.digital_twin import (
     Device,
     Fault,
     FaultPropagationEngine,

@@ -11,7 +11,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from network_agent_rag.api.enterprise import create_enterprise_app
+from network_agent_rag.packs.networkops.api.enterprise import create_enterprise_app
 from network_agent_rag.auth import (
     AuthorizationError,
     JWTProvider,
@@ -146,7 +146,7 @@ class ConsoleSecurityTests(unittest.TestCase):
 
     def test_console_module_has_no_mutating_runtime_dependencies(self) -> None:
         source = Path(
-            "src/network_agent_rag/api/console.py"
+            "src/network_agent_rag/packs/networkops/api/console.py"
         ).read_text(encoding="utf-8")
         for forbidden in (
             "PolicyEngine",

@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from starlette.requests import Request
 
 import network_agent_rag.auth as auth
-from network_agent_rag.api.enterprise import (
+from network_agent_rag.packs.networkops.api.enterprise import (
     create_enterprise_app,
     create_sqlite_enterprise_app,
 )

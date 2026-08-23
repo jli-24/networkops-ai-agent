@@ -6,7 +6,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from network_agent_rag.digital_twin import create_default_campus_network
+from network_agent_rag.packs.networkops.digital_twin import create_default_campus_network
 
 
 class NetworkStateTests(unittest.TestCase):

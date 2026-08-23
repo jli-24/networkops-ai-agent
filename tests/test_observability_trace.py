@@ -12,7 +12,7 @@ import unittest
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 
-from network_agent_rag.api.enterprise import _stream_workflow, create_enterprise_app
+from network_agent_rag.packs.networkops.api.enterprise import _stream_workflow, create_enterprise_app
 from network_agent_rag.audit import SQLiteAuditLog
 from network_agent_rag.observability import SQLiteTraceStore, SpanKind, SpanStatus
 from tests.test_approval_flow import _events

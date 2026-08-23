@@ -16,7 +16,7 @@ SNAPSHOT_TIME = "2026-07-12T09:00:00+08:00"
 
 class MonitoringToolTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.agents = import_module("network_agent_rag.agents")
+        self.agents = import_module("network_agent_rag.packs.networkops.agents")
 
     def _tool(self, name: str) -> BaseTool:
         candidate = getattr(self.agents, name, None)
