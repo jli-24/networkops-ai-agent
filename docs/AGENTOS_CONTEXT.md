@@ -5,7 +5,11 @@
 > 当期验收依据见 [docs/rfc/v0.16-domainpack-contract.md](rfc/v0.16-domainpack-contract.md) §6（十五项清单）。
 > 维护规则：不重生成全文，只更新下方三节（现状/待办/铁律增量）。
 
-## 一、项目现状（v0.16 进行中）
+## 一、项目现状（**v0.16.0 已发布**，2026-08-24）
+
+- 证明命题兑现：同一 Runtime 经同一 DomainPack 契约容纳 embeddedops + networkops 双领域同时运行，core 零领域代码（架构测试强制），旧 checkpoint 兼容有 golden 证据。
+- 发布门禁：485+1skip / Console 17 / L1+L2 verify-fresh 全部通过；tag `v0.16.0`。
+- 显式债务：network capabilities=()（RFC §11）、生产 bge 知识初始化挂接（装配收口）、STM32 选型回退怪癖（候选修复队列）。
 
 - 基线：后端 **467** / Console **17** 全绿（v0.15.0 为 446/17，零回归）。
 - 已落地提交：

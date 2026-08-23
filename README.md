@@ -1,13 +1,14 @@
-# 🚀 NetworkOps AI Agent
+# 🚀 AgentOS（AgentOps Platform）
 
-> 基于 LangGraph + Agentic RAG 的企业网络智能运维智能体平台
-
+> 连接数字世界与物理世界的、可治理的自治智能体操作系统（Runtime + Domain Packs）
 
 <p align="center">
 
-企业网络故障诊断 · 根因分析 · RAG知识检索 · Agent工作流
+Core Runtime · Domain Packs（embeddedops / networkops）· 治理：Policy/Approval/Audit/Rollback · RAG · 验证闭环
 
 </p>
+
+**定位**：差异化不在 Agent 框架，而在 ① actuation——Agent 安全操作真实世界；② 可治理自治——Policy/Approval/Audit/Rollback 是护城河。NetworkOps 是起源场景与首个被提取的领域 pack；EmbeddedOps 是第二个领域证明。v0.16 起 core 零领域代码，领域资产全部经 DomainPack 契约注册。
 
 <p align="center">
 
@@ -15,7 +16,7 @@
 <img src="https://img.shields.io/badge/LangGraph-Agent-green?style=flat-square">
 <img src="https://img.shields.io/badge/RAG-Chroma-orange?style=flat-square">
 <img src="https://img.shields.io/badge/Version-0.13.0-blueviolet?style=flat-square">
-<img src="https://img.shields.io/badge/Test-446%20passed-success?style=flat-square">
+<img src="https://img.shields.io/badge/Test-485%20passed-success?style=flat-square">
 
 </p>
 
@@ -430,7 +431,7 @@ NetworkOps AI Agent includes automated tests for:
 Current test status:
 
 ```text
-446 passed, 1 optional PostgreSQL integration test skipped
+485 passed, 1 optional PostgreSQL integration test skipped
 
 OK
 ```
@@ -949,76 +950,44 @@ QueryAnalyzer
 
 项目不使用 SQLAlchemy 或 Alembic；PostgreSQL 适配直接使用 psycopg 3 参数化 SQL，pytest 作为可选开发依赖，仓库已有基础 GitHub Actions CI。
 
-## 9. 项目目录结构
+## 9. 项目目录结构（v0.16 起：Core Runtime + Domain Packs）
 
 ```text
 .
-├── knowledge/
-│   └── diagnosis/
-│       └── optical_module_degradation.md
-├── topology/
-│   └── sw1_sw2.json
-├── docs/
-│   └── superpowers/
-│       ├── plans/
-│       └── specs/
-├── src/network_agent_rag/
-│   ├── agents/
-│   │   ├── enterprise/
-│   │   │   ├── approval.py
-│   │   │   ├── execution.py
-│   │   │   ├── state.py
-│   │   │   └── workflow.py
-│   │   ├── multi_agent/
-│   │   │   ├── state.py
-│   │   │   ├── supervisor.py
-│   │   │   └── workflow.py
-│   │   ├── diagnosis_workflow.py
-│   │   ├── log_tools.py
-│   │   ├── monitoring_tools.py
-│   │   └── workflow.py
-│   ├── api/
-│   │   ├── enterprise.py
-│   │   ├── enterprise_schemas.py
-│   │   ├── history.py
-│   │   ├── router.py
-│   │   └── schemas.py
-│   ├── core/
-│   │   └── config.py
-│   ├── audit/
-│   │   ├── models.py
-│   │   └── store.py
-│   ├── domain/
-│   │   └── topology.py
-│   ├── digital_twin/
-│   │   ├── fault.py
-│   │   ├── impact.py
-│   │   ├── models.py
-│   │   ├── network_model.py
-│   │   ├── propagation.py
-│   │   ├── simulator.py
-│   │   └── state.py
-│   ├── frontend/
-│   │   ├── app.py
-│   │   └── client.py
-│   ├── infrastructure/
-│   │   └── __init__.py
-│   ├── rag/
-│   │   ├── documents.py
-│   │   └── vector_store.py
-│   ├── demo.py
-│   ├── demo_main.py
-│   ├── multi_agent_demo.py
-│   ├── multi_agent_main.py
-│   └── main.py
-├── tests/
-├── .env.example
-├── .python-version
-├── README.md
-└── requirements.txt
+├── src/network_agent_rag/            # Core Runtime（零领域代码，由架构测试强制）
+│   ├── packs/
+│   │   ├── models.py                 # DomainPackSpec 契约（治理资产强制）
+│   │   ├── registry.py               # 注册管线（schema→冲突→依赖→治理一致性→factory→注册→enable）
+│   │   ├── embeddedops/              # 领域包：嵌入式
+│   │   │   ├── manifest.py           #   能力/权限/角色/知识库/评测集/router/生命周期
+│   │   │   ├── agents/               #   hardware/firmware/debug + 固定图 workflow + 验证闭环
+│   │   │   ├── simulation/           #   虚拟硬件实验室（in_process 确定性仿真器）
+│   │   │   ├── knowledge_corpus/     #   领域语料（注册时幂等初始化 collection）
+│   │   │   ├── evaluation_cases/     #   领域评测集（随 pack 走）
+│   │   │   └── api.py                #   /api/v1/embedded/*
+│   │   └── networkops/               # 领域包：网络运维（起源场景）
+│   │       ├── manifest.py           #   网络域权限/角色（Operator/Engineer/Admin）
+│   │       ├── agents/               #   multi-agent 诊断 + enterprise 审批执行工作流
+│   │       ├── digital_twin/         #   网络孪生（只读传播/影响分析）
+│   │       ├── frontend/             #   Streamlit 演示前端
+│   │       ├── demo/                 #   SW1–SW2 演示入口
+│   │       ├── knowledge_corpus/ · evaluation/
+│   │       └── api/                  #   /chat SSE · /console · enterprise incidents
+│   ├── capability/                   # Capability Registry（版本化能力，backend 字符串引用）
+│   ├── policy/ · auth/ · audit/      # 治理：策略引擎 / RBAC+JWT / 审计
+│   ├── observability/ · evaluation/  # Trace/Metrics/评测 runner（平台设施）
+│   ├── artifact/                     # SHA-256 产物库
+│   ├── domain/task/                  # 统一跨域 Task 模型
+│   ├── rag/                          # 文档加载 + 向量库（跨库检索 search_collections）
+│   └── main.py                       # 装配层：唯一可 import packs 的 core 模块
+├── console/                          # React 操作台（Embedded Lab + 网络治理页面）
+├── tests/                            # 485 项（含架构守卫与 golden checkpoint 恢复）
+├── scripts/                          # verify_fresh / fixture 生成器
+├── docs/                             # 章程 / 工作宪法 / RFC / 执行提示词
+└── deployment/                       # 生产部署参考
 ```
 
-`infrastructure/` 当前仅声明未来外部系统集成边界，没有数据库或监控平台客户端实现。
+平台设施待裁决清单（api/benchmarks、api/observability、demo 层等）见 `docs/AGENTOS_CONTEXT.md` 双清单机制。
 
 ## 10. Engineering Skills
 
@@ -1060,7 +1029,7 @@ Ponytail 用于控制工程复杂度：优先复用标准库和现有依赖，�
 
 ## 11. Detailed Roadmap
 
-Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影，v0.12.0 增加确定性的 Agent Policy Engine，v0.13.0 增加独立离线 Evaluation Layer，v0.15.0 在其上扩展出 EmbeddedOps Agent Platform（Capability Registry、Embedded Copilot、虚拟硬件实验室与自动验证闭环）。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
+Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分别在 v0.2.1、v0.2.2 实现；v0.3.0 已加入独立 Enterprise Workflow；v0.4.0 已加入 Enterprise Observability；v0.5.0-alpha 增加可插拔生产存储，v0.6.0 引入可选 JWT 身份层，v0.7.0 增加单机生产部署参考架构，v0.8.0 固化 Enterprise Security Layer，v0.9.0 正式固化 Authentication Layer，v0.10.0 增加独立身份生命周期，v0.11.0 增加只读治理与合规投影，v0.12.0 增加确定性的 Agent Policy Engine，v0.13.0 增加独立离线 Evaluation Layer，v0.15.0 在其上扩展出 EmbeddedOps Agent Platform（Capability Registry、Embedded Copilot、虚拟硬件实验室与自动验证闭环），v0.16.0 完成 Platform Extraction（DomainPack 契约 + 双领域提取，core 零领域代码）。完整 Digital Twin、真实设备执行和高可用编排仍为 **Planned**。
 
 ### Phase 1 — Supervisor Multi-Agent（Completed in v0.2.0）
 
@@ -1156,6 +1125,19 @@ Phase 1 已在 v0.2.0 实现；Phase 2 的 Foundation 与只读传播分析分�
 - **Console**：新增 Embedded Lab 页面——目标提交、任务列表、状态机进度、审批卡片（执行计划 + 批准/拒绝）、产物哈希表与能力目录。
 
 限制：仿真器为确定性内置实现（真实 Wokwi/Renode 适配器为 Planned）；LLM 生成与诊断依赖注入点已留好但默认使用确定性回退；嵌入式任务存储为进程内 TaskStore。
+
+
+
+### Phase 9 — Platform Extraction: Core Runtime + Domain Packs（Completed in v0.16.0）
+
+- **DomainPack 契约与注册管线**：`DomainPackSpec`（治理资产 permissions+roles 强制）+ `PackRegistry` fail-fast 管线（(name,version) 冲突、权限目录边界、角色/能力权限一致性、PolicyEngine 覆盖校验、factory 解析；失败零残留）；
+- **双领域提取**：embeddedops 与 networkops 全量资产经管线注册（agents/workflows/权限/角色/知识库/评测集/routers/生命周期），`main.py` 装配层按 manifest 挂载，平台 router 参数注入不 import packs；
+- **core 零领域代码**：import 扫描架构测试强制（排除列表双清单机制，领域燃尽清单归零）；
+- **兼容性证据**：v0.15/v0.16 golden checkpoint fixtures——旧布局序列化、新布局恢复并 resume 至终点（审批挂起 + mid-flight 双场景，非循环论证）；
+- **每步可运行**：`make verify-fresh`（L1 零状态启动 + 双 pack 断言 + 双 API 端到端；L2 全新克隆于发布前）；
+- **证明命题**：同一 Runtime 经同一契约容纳两个既有领域同时运行——平台非为单一领域定制。
+
+限制与显式债务：网络域工具未声明为 Capability（依赖注入保留，RFC §11）；生产 bge-m3 知识初始化挂接待 v0.17+ 装配；ui_extensions 仅 schema 登记。
 
 ## 12. Quick Start
 
@@ -1379,6 +1361,18 @@ curl http://127.0.0.1:8000/api/v1/capabilities -H "Authorization: Bearer <token>
 ```
 
 Console 切换到 **Embedded Lab** 页面可视化完成同一流程。相关测试：`tests/test_capability_registry.py`、`tests/test_embedded_*.py`。
+
+### 12.13 verify-fresh 与双 pack 零状态验证（v0.16.0）
+
+```bash
+# L1：零状态临时数据根 → 双 pack 注册（含知识初始化）→ API 端到端 → demo 配方
+make verify-fresh
+
+# 网络域演示入口（SW1–SW2 多 Agent 诊断，v0.16 起位于 networkops pack）
+python -m network_agent_rag.packs.networkops.demo.multi_agent_main
+```
+
+verify-fresh 输出含：`enabled packs: ['embeddedops', 'networkops']`、`POST /api/v1/embedded/tasks -> 201 AWAITING_APPROVAL -> COMPLETED/PASSED`、`POST /api/v1/chat -> 200`（SSE 事件流）。
 
 ## 13. License
 
