@@ -62,7 +62,7 @@ def _capability(
 def _spec(
     *,
     name: str = "embeddedops",
-    version: str = "0.15.0",
+    version: str = "0.16.0",
     capabilities: tuple[Capability, ...] | None = None,
     permissions: tuple[PermissionSpec, ...] | None = None,
     roles: tuple[RoleSpec, ...] | None = None,
@@ -167,7 +167,7 @@ class PackRegistrationPipelineTests(unittest.TestCase):
         registry = PackRegistry()
         registry.register(_spec())
         with self.assertRaises(PackRegistrationError):
-            registry.register(_spec(version="0.16.0"))
+            registry.register(_spec(version="0.17.0"))
 
     def test_capability_multi_version_and_resolve_default_keep_semantics(
         self,
